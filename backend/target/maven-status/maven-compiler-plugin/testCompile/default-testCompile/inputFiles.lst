@@ -1,0 +1,5 @@
+/app/src/test/java/com/rag/backend/RetrieveEndpointIT.java
+/app/src/test/java/com/rag/backend/ChatControllerIT.java
+/app/src/test/java/com/rag/backend/EmbeddingBackfillIT.java
+/app/src/test/java/com/rag/backend/VectorSearchIT.java
+/app/src/test/java/com/rag/backend/IndexingIT.java

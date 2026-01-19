@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: rag-postgres
     environment:
       POSTGRES_DB: ragdb
@@ -30,6 +28,7 @@ services:
       SPRING_DATASOURCE_USERNAME: raguser
       SPRING_DATASOURCE_PASSWORD: ragpass
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     ports:
       - "8080:8080"
     depends_on:
@@ -42,6 +41,28 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  backend-tests:
+    image: maven:3.9-eclipse-temurin-21
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - rag-network
+    environment:
+      SPRING_PROFILES_ACTIVE: test
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ragdb
+      SPRING_DATASOURCE_USERNAME: raguser
+      SPRING_DATASOURCE_PASSWORD: ragpass
+    command:
+      [
+        "bash",
+        "-lc",
+        "until (echo > /dev/tcp/postgres/5432) >/dev/null 2>&1; do echo 'Waiting for Postgres...'; sleep 1; done; mvn -e test"
+      ]
 
   frontend:
     build:

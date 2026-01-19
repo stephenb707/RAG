@@ -1,0 +1,17 @@
+/app/src/main/java/com/rag/backend/indexing/Hashing.java
+/app/src/main/java/com/rag/backend/indexing/IndexingService.java
+/app/src/main/java/com/rag/backend/entity/RepositoryEntity.java
+/app/src/main/java/com/rag/backend/dto/ChatRequest.java
+/app/src/main/java/com/rag/backend/repo/ChunkRepo.java
+/app/src/main/java/com/rag/backend/BackendApplication.java
+/app/src/main/java/com/rag/backend/entity/DocumentEntity.java
+/app/src/main/java/com/rag/backend/entity/ChunkEntity.java
+/app/src/main/java/com/rag/backend/config/CorsConfig.java
+/app/src/main/java/com/rag/backend/controller/IndexController.java
+/app/src/main/java/com/rag/backend/repo/DocumentRepo.java
+/app/src/main/java/com/rag/backend/controller/ChatController.java
+/app/src/main/java/com/rag/backend/indexing/Chunker.java
+/app/src/main/java/com/rag/backend/ai/EmbeddingService.java
+/app/src/main/java/com/rag/backend/dto/ChatResponse.java
+/app/src/main/java/com/rag/backend/repo/RepositoryRepo.java
+/app/src/main/java/com/rag/backend/service/ChunkEmbeddingService.java
