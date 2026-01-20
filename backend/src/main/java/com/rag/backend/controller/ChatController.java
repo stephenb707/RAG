@@ -54,6 +54,22 @@ public class ChatController {
                 .toList();
     }
 
+    @PostMapping("/chat/explain-architecture")
+    public RagAnswer explainArchitecture(@RequestBody ChatRequest request) {
+        return ragChatService.answerWithMode(
+                request.getMessage(),
+                RagChatService.Mode.EXPLAIN_ARCHITECTURE
+        );
+    }
+
+    @PostMapping("/chat/code-review")
+    public RagAnswer codeReview(@RequestBody ChatRequest request) {
+        return ragChatService.answerWithMode(
+                request.getMessage(),
+                RagChatService.Mode.CODE_REVIEW
+        );
+    }
+
     private static String toPgVectorLiteral(float[] v) {
         StringBuilder sb = new StringBuilder();
         sb.append('[');

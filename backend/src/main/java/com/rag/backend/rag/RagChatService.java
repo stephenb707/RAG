@@ -13,6 +13,11 @@ import java.util.stream.Collectors;
 
 @Service
 public class RagChatService {
+    public enum Mode {
+        DEFAULT,
+        EXPLAIN_ARCHITECTURE,
+        CODE_REVIEW
+    }    
 
     private final EmbeddingService embeddingService;
     private final ChunkRepo chunkRepo;
@@ -29,47 +34,67 @@ public class RagChatService {
     }
 
     public RagAnswer answerQuestion(String question) {
-
-        // 1) Embed question
-        float[] questionEmbedding = embeddingService.embed(question);
-
-        // 2) Retrieve top 5 relevant chunks
-        List<ChunkEntity> chunks =
-                chunkRepo.searchTopK(toPgVectorLiteral(questionEmbedding), 5);
-
-        // 3) Build context block for LLM
-        String context = buildContext(chunks);
-
-        // 4) Build full prompt
-        String systemPrompt = """
-            You are a senior software engineer.
-            Only answer using the provided context.
-            You MUST cite file paths and line ranges in your answer.
-            """;
-
-        String userPrompt = """
-            QUESTION:
-            %s
-
-            CONTEXT:
-            %s
-            """.formatted(question, context);
-
-        // 5) Call OpenAI
-        String answer = chatClient.chat(systemPrompt, userPrompt);
-
-        List<Citation> citations = chunks.stream()
-            .map(c -> new Citation(
-                c.getDocument().getFilePath(),
-                c.getStartLine(),
-                c.getEndLine(),
-                c.getContent()
-            ))
-            .toList();
-
-        return new RagAnswer(answer, citations);
+        return answerWithMode(question, Mode.DEFAULT);
     }
 
+    public RagAnswer answerWithMode(String question, Mode mode) {
+
+        float[] questionEmbedding = embeddingService.embed(question);
+    
+        List<ChunkEntity> chunks =
+                chunkRepo.searchTopK(toPgVectorLiteral(questionEmbedding), 5);
+    
+        String context = buildContext(chunks);
+    
+        String systemPrompt = switch (mode) {
+            case EXPLAIN_ARCHITECTURE ->
+                    """
+                    You are a senior software architect.
+                    Explain the high-level architecture of this system
+                    using ONLY the provided context.
+                    Cite files and line ranges.
+                    """;
+    
+            case CODE_REVIEW ->
+                    """
+                    You are a senior code reviewer.
+                    Provide constructive suggestions for improvement
+                    using ONLY the provided context.
+                    Cite files and line ranges.
+                    """;
+    
+            default ->
+                    """
+                    You are a senior software engineer.
+                    Only answer using the provided context.
+                    You MUST cite file paths and line ranges in your answer.
+                    """;
+        };
+    
+        String userPrompt = """
+                QUESTION:
+                %s
+    
+                CONTEXT:
+                %s
+                """.formatted(question, context);
+    
+        String answer = chatClient.chat(systemPrompt, userPrompt);
+    
+        return new RagAnswer(answer, toCitations(chunks));
+    }
+
+    private List<Citation> toCitations(List<ChunkEntity> chunks) {
+        return chunks.stream()
+                .map(c -> new Citation(
+                        c.getDocument().getFilePath(),
+                        c.getStartLine(),
+                        c.getEndLine(),
+                        c.getContent()
+                ))
+                .toList();
+    }
+    
     private String buildContext(List<ChunkEntity> chunks) {
         return chunks.stream()
                 .map(c ->
