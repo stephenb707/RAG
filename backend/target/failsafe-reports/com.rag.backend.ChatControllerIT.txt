@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.rag.backend.ChatControllerIT
+-------------------------------------------------------------------------------
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 41.14 s -- in com.rag.backend.ChatControllerIT

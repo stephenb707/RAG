@@ -3,11 +3,14 @@ package com.rag.backend;
 import com.rag.backend.repo.ChunkRepo;
 import com.rag.backend.repo.DocumentRepo;
 import com.rag.backend.repo.RepositoryRepo;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +24,13 @@ class IndexingIT {
     @Autowired private RepositoryRepo repositoryRepo;
     @Autowired private DocumentRepo documentRepo;
     @Autowired private ChunkRepo chunkRepo;
+    @Autowired JdbcTemplate jdbc;
+
+    @BeforeEach
+    void resetDb() {
+        // Add other tables here if you have them (tenants, users, etc.)
+        jdbc.execute("TRUNCATE TABLE chunks, documents, repositories RESTART IDENTITY CASCADE");
+    }
 
     record IndexRequest(String repoName, String rootPath) {}
     record IndexResponse(long repositoryId, int documentsIndexed, int chunksIndexed) {}

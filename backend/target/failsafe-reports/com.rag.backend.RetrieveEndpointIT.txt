@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.rag.backend.RetrieveEndpointIT
+-------------------------------------------------------------------------------
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 6.865 s -- in com.rag.backend.RetrieveEndpointIT

@@ -2,8 +2,9 @@ package com.rag.backend.controller;
 
 import com.rag.backend.ai.EmbeddingService;
 import com.rag.backend.dto.ChatRequest;
-import com.rag.backend.dto.ChatResponse;
-import com.rag.backend.entity.ChunkEntity;
+import com.rag.backend.dto.ChunkSnippet;
+import com.rag.backend.dto.RagAnswer;
+import com.rag.backend.rag.RagChatService;
 import com.rag.backend.repo.ChunkRepo;
 
 import java.util.List;
@@ -18,21 +19,21 @@ public class ChatController {
 
     private final EmbeddingService embeddingService;
     private final ChunkRepo chunkRepo;
+    private final RagChatService ragChatService;
 
-    public ChatController(EmbeddingService embeddingService, ChunkRepo chunkRepo) {
+    public ChatController(EmbeddingService embeddingService, ChunkRepo chunkRepo, RagChatService ragChatService) {
         this.embeddingService = embeddingService;
         this.chunkRepo = chunkRepo;
+        this.ragChatService = ragChatService;
     }
 
     @PostMapping("/chat")
-    public ChatResponse chat(@RequestBody ChatRequest request) {
-        String reply = "Dummy response: " + request.getMessage();
-        return new ChatResponse(reply);
+    public RagAnswer chat(@RequestBody ChatRequest request) {
+        return ragChatService.answerQuestion(request.getMessage());
     }
 
-    // NOTE: route is /api/retrieve (not /api/api/retrieve)
     @PostMapping("/retrieve")
-    public List<ChunkEntity> retrieve(@RequestBody Map<String, String> body) {
+    public List<ChunkSnippet> retrieve(@RequestBody Map<String, String> body) {
 
         String question = body.getOrDefault("question", "").trim();
         if (question.isEmpty()) {
@@ -40,10 +41,17 @@ public class ChatController {
         }
 
         float[] questionEmbedding = embeddingService.embed(question);
-
         String vectorLiteral = toPgVectorLiteral(questionEmbedding);
 
-        return chunkRepo.searchTopK(vectorLiteral, 5);
+        return chunkRepo.searchTopK(vectorLiteral, 5).stream()
+                .map(c -> new ChunkSnippet(
+                        c.getId(),
+                        c.getDocument().getFilePath(),
+                        c.getStartLine(),
+                        c.getEndLine(),
+                        c.getContent()
+                ))
+                .toList();
     }
 
     private static String toPgVectorLiteral(float[] v) {

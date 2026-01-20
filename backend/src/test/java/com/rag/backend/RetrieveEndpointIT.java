@@ -32,6 +32,8 @@ class RetrieveEndpointIT {
 
     @BeforeEach
     void setup() throws Exception {
+        jdbc.execute("TRUNCATE TABLE chunks, documents, repositories RESTART IDENTITY CASCADE");
+
         Long repoIdLong = jdbc.queryForObject(
                 "INSERT INTO repositories(name, root_path) VALUES ('test-repo','/tmp') RETURNING id",
                 Long.class

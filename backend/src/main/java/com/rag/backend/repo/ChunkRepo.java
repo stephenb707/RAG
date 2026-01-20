@@ -18,7 +18,7 @@ public interface ChunkRepo extends JpaRepository<ChunkEntity, Long> {
         SELECT *
         FROM chunks
         WHERE embedding IS NOT NULL
-        ORDER BY embedding <-> CAST(:queryEmbedding AS vector)
+        ORDER BY embedding <-> CAST(:queryEmbedding AS vector), id
         LIMIT :k
         """, nativeQuery = true)
     List<ChunkEntity> searchTopK(@Param("queryEmbedding") String queryEmbedding, @Param("k") int k);

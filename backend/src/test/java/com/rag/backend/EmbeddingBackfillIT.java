@@ -1,7 +1,7 @@
 package com.rag.backend;
 
 import com.rag.backend.ai.EmbeddingService;
-import com.rag.backend.service.ChunkEmbeddingService;
+import com.rag.backend.retrieval.ChunkEmbeddingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +13,9 @@ import org.springframework.test.context.ActiveProfiles;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest
@@ -29,20 +32,23 @@ class EmbeddingBackfillIT {
 
     @BeforeEach
     void setup() {
+        // IMPORTANT: clean DB so other ITs don't pollute this test
+        jdbc.execute("TRUNCATE TABLE chunks, documents, repositories RESTART IDENTITY CASCADE");
+
         Long repoIdLong = jdbc.queryForObject(
                 "INSERT INTO repositories(name, root_path) VALUES ('test-repo','/tmp') RETURNING id",
                 Long.class
         );
         repoId = Objects.requireNonNull(repoIdLong, "Repository ID must not be null");
-        
-        Long docIdLong = jdbc.queryForObject(
-                "INSERT INTO documents(repository_id, file_path, content_hash) VALUES (?, 'file.txt', 'h') RETURNING id",
-                Long.class,
-                repoId
-        );
-        docId = Objects.requireNonNull(docIdLong, "Document ID must not be null");
 
-        jdbc.update("DELETE FROM chunks WHERE document_id = ?", docId);
+        // If your documents table requires `content` (NOT NULL), include it.
+        Long docIdLong = jdbc.queryForObject(
+            "INSERT INTO documents(repository_id, file_path, content_hash) VALUES (?, 'file.txt', 'h') RETURNING id",
+            Long.class,
+            repoId
+        );
+    
+        docId = Objects.requireNonNull(docIdLong, "Document ID must not be null");
 
         // Create chunks with NULL embeddings
         jdbc.update("""
@@ -57,7 +63,10 @@ class EmbeddingBackfillIT {
         when(embeddingService.embed("chunk one")).thenReturn(unitVector(0));
         when(embeddingService.embed("chunk two")).thenReturn(unitVector(1));
 
+        // Act
         int updated = chunkEmbeddingService.backfillMissingEmbeddings(100);
+
+        // Assert
         assertThat(updated).isGreaterThanOrEqualTo(2);
 
         Integer stillNull = jdbc.queryForObject(
@@ -66,6 +75,9 @@ class EmbeddingBackfillIT {
                 docId
         );
         assertThat(stillNull).isEqualTo(0);
+
+        // Verify AFTER the call
+        verify(embeddingService, atLeastOnce()).embed(anyString());
     }
 
     private static float[] unitVector(int index) {
