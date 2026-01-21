@@ -3,6 +3,7 @@
 /app/src/main/java/com/rag/backend/entity/RepositoryEntity.java
 /app/src/main/java/com/rag/backend/dto/ChatRequest.java
 /app/src/main/java/com/rag/backend/repo/ChunkRepo.java
+/app/src/main/java/com/rag/backend/controller/GlobalExceptionHandler.java
 /app/src/main/java/com/rag/backend/dto/RagAnswer.java
 /app/src/main/java/com/rag/backend/BackendApplication.java
 /app/src/main/java/com/rag/backend/entity/DocumentEntity.java

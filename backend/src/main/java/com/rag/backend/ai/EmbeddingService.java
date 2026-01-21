@@ -13,7 +13,7 @@ public class EmbeddingService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${openai.apiKey:}")
+    @Value("${OPENAI_API_KEY:}")
     private String apiKey;
 
     public float[] embed(String text) {
