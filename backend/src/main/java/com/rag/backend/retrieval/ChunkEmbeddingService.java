@@ -48,6 +48,34 @@ public class ChunkEmbeddingService {
         return updated;
     }
 
+    public record BackfillResult(int chunksEmbedded, long chunksRemaining, long elapsedMs) {}
+
+    @Transactional
+    public BackfillResult backfillMissingEmbeddingsForRepo(String repoName, int batchSize) {
+        long startTime = System.currentTimeMillis();
+        int totalEmbedded = 0;
+        long remaining = chunkRepo.countMissingEmbeddingsForRepo(repoName);
+
+        while (remaining > 0) {
+            List<ChunkEntity> chunks = chunkRepo.findTopMissingEmbeddingsForRepo(repoName, batchSize);
+            if (chunks.isEmpty()) {
+                break;
+            }
+
+            for (ChunkEntity chunk : chunks) {
+                float[] embedding = embeddingService.embed(chunk.getContent());
+                String vectorLiteral = toPgVectorLiteral(embedding);
+                chunkRepo.updateEmbedding(chunk.getId(), vectorLiteral);
+                totalEmbedded++;
+            }
+
+            remaining = chunkRepo.countMissingEmbeddingsForRepo(repoName);
+        }
+
+        long elapsedMs = System.currentTimeMillis() - startTime;
+        return new BackfillResult(totalEmbedded, remaining, elapsedMs);
+    }
+
     private static String toPgVectorLiteral(float[] v) {
         StringBuilder sb = new StringBuilder();
         sb.append('[');

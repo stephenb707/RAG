@@ -38,7 +38,15 @@ public class IndexingService {
             "sql", "env"
     );
 
-    public record IndexResult(long repositoryId, int documentsIndexed, int chunksIndexed) {}
+    public record IndexResult(
+            long repositoryId,
+            int filesScanned,
+            int filesIndexed,
+            int filesSkipped,
+            int documentsUpserted,
+            int chunksCreated,
+            long elapsedMs
+    ) {}
 
     public IndexingService(RepositoryRepo repositoryRepo, DocumentRepo documentRepo, ChunkRepo chunkRepo) {
         this.repositoryRepo = repositoryRepo;
@@ -48,6 +56,8 @@ public class IndexingService {
 
     @Transactional
     public IndexResult indexFolder(String repoName, String rootPath) throws IOException {
+        long startTime = System.currentTimeMillis();
+        
         Path root = Paths.get(rootPath).normalize().toAbsolutePath();
         if (!Files.exists(root) || !Files.isDirectory(root)) {
             throw new IllegalArgumentException("Path does not exist or is not a directory: " + root);
@@ -55,7 +65,10 @@ public class IndexingService {
 
         RepositoryEntity repo = repositoryRepo.save(new RepositoryEntity(repoName, root.toString()));
 
-        int docs = 0;
+        int filesScanned = 0;
+        int filesIndexed = 0;
+        int filesSkipped = 0;
+        int documentsUpserted = 0;
         int chunks = 0;
 
         try (Stream<Path> paths = Files.walk(root)) {
@@ -73,17 +86,28 @@ public class IndexingService {
                 }
 
                 if (!Files.isRegularFile(p)) continue;
-                if (isUnderIgnoredDir(root, p)) continue;
-                if (!isAllowedFile(p)) continue;
+                
+                filesScanned++;
+                
+                if (isUnderIgnoredDir(root, p)) {
+                    filesSkipped++;
+                    continue;
+                }
+                if (!isAllowedFile(p)) {
+                    filesSkipped++;
+                    continue;
+                }
 
                 List<String> lines;
                 try {
                     lines = Files.readAllLines(p, StandardCharsets.UTF_8);
                 } catch (MalformedInputException mie) {
                     // Non-UTF8 or binary-ish file, skip.
+                    filesSkipped++;
                     continue;
                 } catch (Exception ex) {
                     // Skip unreadable files
+                    filesSkipped++;
                     continue;
                 }
 
@@ -92,7 +116,8 @@ public class IndexingService {
 
                 String relativePath = root.relativize(p.toAbsolutePath()).toString().replace("\\", "/");
                 DocumentEntity doc = documentRepo.save(new DocumentEntity(repo, relativePath, docHash));
-                docs++;
+                filesIndexed++;
+                documentsUpserted++;
 
                 List<Chunker.Chunk> chunkList = chunker.chunkLines(lines);
                 List<ChunkEntity> chunkEntities = new ArrayList<>(chunkList.size());
@@ -114,7 +139,8 @@ public class IndexingService {
             }
         }
 
-        return new IndexResult(repo.getId(), docs, chunks);
+        long elapsedMs = System.currentTimeMillis() - startTime;
+        return new IndexResult(repo.getId(), filesScanned, filesIndexed, filesSkipped, documentsUpserted, chunks, elapsedMs);
     }
 
     private boolean shouldIgnoreDir(Path dir) {

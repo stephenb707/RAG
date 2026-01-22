@@ -33,7 +33,17 @@ class IndexingIT {
     }
 
     record IndexRequest(String repoName, String rootPath) {}
-    record IndexResponse(long repositoryId, int documentsIndexed, int chunksIndexed) {}
+    record IndexResponse(
+            long repositoryId,
+            int filesScanned,
+            int filesIndexed,
+            int filesSkipped,
+            int documentsUpserted,
+            int chunksCreated,
+            int chunksEmbedded,
+            long elapsedMsTotal,
+            String embeddingError
+    ) {}
 
     @Test
     void index_createsRepositoryDocumentsAndChunks() throws Exception {
@@ -66,8 +76,13 @@ class IndexingIT {
         IndexResponse responseBody = resp.getBody();
         assertThat(responseBody).isNotNull();
         if (responseBody != null) {
-            assertThat(responseBody.documentsIndexed()).isGreaterThanOrEqualTo(2);
-            assertThat(responseBody.chunksIndexed()).isGreaterThan(0);
+            assertThat(responseBody.filesScanned()).isGreaterThanOrEqualTo(2);
+            assertThat(responseBody.filesIndexed()).isGreaterThanOrEqualTo(2);
+            assertThat(responseBody.documentsUpserted()).isGreaterThanOrEqualTo(2);
+            assertThat(responseBody.chunksCreated()).isGreaterThan(0);
+            // Note: chunksEmbedded might be 0 if embedding service is not available in test
+            assertThat(responseBody.chunksEmbedded()).isGreaterThanOrEqualTo(0);
+            assertThat(responseBody.elapsedMsTotal()).isGreaterThanOrEqualTo(0);
         }
 
         // Assert: DB has rows

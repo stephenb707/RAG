@@ -23,12 +23,15 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rag-backend
+    volumes:
+      - "${CODEBASE_PATH}:/repos/codebase:ro"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ragdb
       SPRING_DATASOURCE_USERNAME: raguser
       SPRING_DATASOURCE_PASSWORD: ragpass
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      RAG_REPO_ROOTS: "/repos/codebase"
     ports:
       - "8080:8080"
     depends_on:
@@ -72,7 +75,7 @@ services:
       dockerfile: Dockerfile
     container_name: rag-frontend
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://backend:8080
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
     ports:
       - "3000:3000"
     depends_on:

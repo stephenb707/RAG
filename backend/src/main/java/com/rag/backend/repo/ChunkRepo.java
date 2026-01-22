@@ -32,4 +32,32 @@ public interface ChunkRepo extends JpaRepository<ChunkEntity, Long> {
         """, nativeQuery = true)
     List<ChunkEntity> findTopMissingEmbeddings(@Param("limit") int limit);
 
+    @Query(value = """
+        SELECT c.*
+        FROM chunks c
+        INNER JOIN documents d ON c.document_id = d.id
+        INNER JOIN repositories r ON d.repository_id = r.id
+        WHERE r.name = :repoName
+        AND c.embedding IS NULL
+        ORDER BY c.id
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<ChunkEntity> findTopMissingEmbeddingsForRepo(@Param("repoName") String repoName, @Param("limit") int limit);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM chunks c
+        INNER JOIN documents d ON c.document_id = d.id
+        INNER JOIN repositories r ON d.repository_id = r.id
+        WHERE r.name = :repoName
+        AND c.embedding IS NULL
+        """, nativeQuery = true)
+    long countMissingEmbeddingsForRepo(@Param("repoName") String repoName);
+
+    @Query(value = "SELECT COUNT(*) FROM chunks", nativeQuery = true)
+    long countTotalChunks();
+
+    @Query(value = "SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL", nativeQuery = true)
+    long countChunksWithEmbedding();
+
 }

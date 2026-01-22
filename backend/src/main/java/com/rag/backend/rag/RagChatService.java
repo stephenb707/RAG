@@ -44,6 +44,23 @@ public class RagChatService {
         List<ChunkEntity> chunks =
                 chunkRepo.searchTopK(toPgVectorLiteral(questionEmbedding), 5);
     
+        // Retrieval guardrail: if no chunks found, return helpful message
+        if (chunks.isEmpty()) {
+            long totalChunks = chunkRepo.countTotalChunks();
+            long chunksWithEmbedding = chunkRepo.countChunksWithEmbedding();
+            long chunksMissingEmbedding = totalChunks - chunksWithEmbedding;
+            
+            String diagnosticMessage = String.format(
+                    "I couldn't retrieve any embedded context from your repo. " +
+                    "This usually means chunks haven't been embedded yet. " +
+                    "Run POST /api/reindex or re-run indexing (which now embeds), then try again.\n\n" +
+                    "Diagnostic: Total chunks: %d, With embeddings: %d, Missing embeddings: %d",
+                    totalChunks, chunksWithEmbedding, chunksMissingEmbedding
+            );
+            
+            return new RagAnswer(diagnosticMessage, List.of());
+        }
+    
         String context = buildContext(chunks);
     
         String systemPrompt = switch (mode) {
