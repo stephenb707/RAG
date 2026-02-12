@@ -6,7 +6,6 @@ import java.time.OffsetDateTime;
 @Entity
 @Table(name = "repositories")
 public class RepositoryEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

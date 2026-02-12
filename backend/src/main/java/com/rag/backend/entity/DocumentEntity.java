@@ -9,7 +9,6 @@ import java.time.OffsetDateTime;
     uniqueConstraints = @UniqueConstraint(name = "uq_documents_repo_file", columnNames = {"repository_id", "file_path"})
 )
 public class DocumentEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

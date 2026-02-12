@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class OpenAIChatClient {
-
     private final OpenAIClient client;
 
     public OpenAIChatClient(@Value("${OPENAI_API_KEY}") String apiKey) {
@@ -21,7 +20,6 @@ public class OpenAIChatClient {
 
     public String chat(String system, String user) {
         ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
-                // Use a model enum that definitely exists in the SDK README
                 .model(ChatModel.GPT_4O)
                 .addSystemMessage(system)
                 .addUserMessage(user)

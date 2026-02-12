@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: rag-backend
     volumes:
-      - "${CODEBASE_PATH}:/repos/codebase:ro"
+      - "${CODEBASE_PATH}:/repos/codebase:rw"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ragdb
       SPRING_DATASOURCE_USERNAME: raguser
@@ -32,6 +32,14 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       RAG_REPO_ROOTS: "/repos/codebase"
+      AGENT_RUNNER_URL: "http://runner:8090"
+      AGENT_RUNNER_BASE_URL: "http://runner:8090"
+      AGENT_MAX_FILE_BYTES: "200000"
+      AGENT_MAX_PATCH_FILES: "3"
+      AGENT_ALLOWED_COMMANDS: "./mvnw -B -ntp test|./mvnw -B -ntp -DskipTests package|sh -lc \"echo START; sleep 120; echo END\""
+      AGENT_COMMAND_TIMEOUT_SECONDS: "900"
+      AGENT_COMMAND_MAX_OUTPUT_BYTES: "400000"
+
     ports:
       - "8080:8080"
     depends_on:
@@ -82,6 +90,25 @@ services:
       - backend
     networks:
       - rag-network
+
+  runner:
+    build:
+      context: ./runner
+      dockerfile: Dockerfile
+    container_name: rag-runner
+    volumes:
+      - "${CODEBASE_PATH}:/repos/codebase:rw"
+    environment:
+      RUNNER_REPO_ROOT: "/repos/codebase"
+      RUNNER_MAX_OUTPUT_BYTES: "400000"
+      RUNNER_TIMEOUT_SECONDS: "300"
+    expose:
+      - "8090"
+    networks:
+      - rag-network
+    ports:
+      - "8090:8090"
+
 
 volumes:
   postgres_data:

@@ -9,7 +9,6 @@ import java.time.OffsetDateTime;
     uniqueConstraints = @UniqueConstraint(name = "uq_chunks_doc_index", columnNames = {"document_id", "chunk_index"})
 )
 public class ChunkEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

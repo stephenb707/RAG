@@ -10,7 +10,6 @@ import java.util.List;
 
 @Service
 public class ChunkEmbeddingService {
-
     private final ChunkRepo chunkRepo;
     private final EmbeddingService embeddingService;
 
@@ -24,12 +23,8 @@ public class ChunkEmbeddingService {
         List<ChunkEntity> chunks = chunkRepo.findAll();
 
         for (ChunkEntity chunk : chunks) {
-            // your entity field is "content"
             float[] embedding = embeddingService.embed(chunk.getContent());
-
-            // pgvector expects a string like: [0.1,0.2,0.3]
             String vectorLiteral = toPgVectorLiteral(embedding);
-
             chunkRepo.updateEmbedding(chunk.getId(), vectorLiteral);
         }
     }
@@ -44,7 +39,6 @@ public class ChunkEmbeddingService {
             String vectorLiteral = toPgVectorLiteral(embedding);
             updated += chunkRepo.updateEmbedding(chunk.getId(), vectorLiteral);
         }
-
         return updated;
     }
 
@@ -61,17 +55,14 @@ public class ChunkEmbeddingService {
             if (chunks.isEmpty()) {
                 break;
             }
-
             for (ChunkEntity chunk : chunks) {
                 float[] embedding = embeddingService.embed(chunk.getContent());
                 String vectorLiteral = toPgVectorLiteral(embedding);
                 chunkRepo.updateEmbedding(chunk.getId(), vectorLiteral);
                 totalEmbedded++;
             }
-
             remaining = chunkRepo.countMissingEmbeddingsForRepo(repoName);
         }
-
         long elapsedMs = System.currentTimeMillis() - startTime;
         return new BackfillResult(totalEmbedded, remaining, elapsedMs);
     }

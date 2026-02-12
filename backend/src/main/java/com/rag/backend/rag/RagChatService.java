@@ -9,6 +9,7 @@ import com.rag.backend.repo.ChunkRepo;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,11 +24,7 @@ public class RagChatService {
     private final ChunkRepo chunkRepo;
     private final OpenAIChatClient chatClient;
 
-    public RagChatService(
-            EmbeddingService embeddingService,
-            ChunkRepo chunkRepo,
-            OpenAIChatClient chatClient
-    ) {
+    public RagChatService(EmbeddingService embeddingService, ChunkRepo chunkRepo, OpenAIChatClient chatClient) {
         this.embeddingService = embeddingService;
         this.chunkRepo = chunkRepo;
         this.chatClient = chatClient;
@@ -41,10 +38,18 @@ public class RagChatService {
 
         float[] questionEmbedding = embeddingService.embed(question);
     
-        List<ChunkEntity> chunks =
-                chunkRepo.searchTopK(toPgVectorLiteral(questionEmbedding), 5);
-    
-        // Retrieval guardrail: if no chunks found, return helpful message
+        String queryVec = toPgVectorLiteral(questionEmbedding);
+        String fileHint = extractFileHint(question);
+
+        List<ChunkEntity> chunks;
+        if (fileHint != null) {
+        List<ChunkEntity> inFile = chunkRepo.searchTopKInFile(queryVec, fileHint, 3);
+        List<ChunkEntity> global = chunkRepo.searchTopK(queryVec, 5);
+        chunks = mergeByIdCap(inFile, global, 5);
+        } else {
+        chunks = chunkRepo.searchTopK(queryVec, 5);
+        }
+
         if (chunks.isEmpty()) {
             long totalChunks = chunkRepo.countTotalChunks();
             long chunksWithEmbedding = chunkRepo.countChunksWithEmbedding();
@@ -57,11 +62,17 @@ public class RagChatService {
                     "Diagnostic: Total chunks: %d, With embeddings: %d, Missing embeddings: %d",
                     totalChunks, chunksWithEmbedding, chunksMissingEmbedding
             );
-            
             return new RagAnswer(diagnosticMessage, List.of());
         }
     
         String context = buildContext(chunks);
+
+        String citationRule = """
+        When you reference code, include citations in this exact format on the same sentence:
+        [<filePath>:<start>-<end>]
+
+        Only cite files that appear in the provided CONTEXT.
+        """;
     
         String systemPrompt = switch (mode) {
             case EXPLAIN_ARCHITECTURE ->
@@ -70,7 +81,7 @@ public class RagChatService {
                     Explain the high-level architecture of this system
                     using ONLY the provided context.
                     Cite files and line ranges.
-                    """;
+                    """ + citationRule;
     
             case CODE_REVIEW ->
                     """
@@ -78,14 +89,14 @@ public class RagChatService {
                     Provide constructive suggestions for improvement
                     using ONLY the provided context.
                     Cite files and line ranges.
-                    """;
+                    """ + citationRule;
     
             default ->
                     """
                     You are a senior software engineer.
                     Only answer using the provided context.
                     You MUST cite file paths and line ranges in your answer.
-                    """;
+                    """ + citationRule;
         };
     
         String userPrompt = """
@@ -97,8 +108,105 @@ public class RagChatService {
                 """.formatted(question, context);
     
         String answer = chatClient.chat(systemPrompt, userPrompt);
+
+        List<Citation> citations = toCitations(chunks);
+        citations = filterCitationsByAnswer(answer, citations);
+        citations = mergeOverlappingCitations(citations);
+
+        String confidence = buildConfidenceLine(fileHint, chunks);
+        String answerWithConfidence = confidence + "\n\n" + answer;
     
-        return new RagAnswer(answer, toCitations(chunks));
+        return new RagAnswer(answerWithConfidence, citations);
+    }
+
+    private static final Pattern FILE_REF =
+    Pattern.compile("([\\w./-]+\\.(java|kt|ts|tsx|js|jsx|py|go|cs|sql|md|yml|yaml))", Pattern.CASE_INSENSITIVE);
+    
+    private String extractFileHint(String question) {
+        var m = FILE_REF.matcher(question);
+        return m.find() ? m.group(1) : null;
+    }
+
+    private List<ChunkEntity> mergeByIdCap(List<ChunkEntity> primary, List<ChunkEntity> fallback, int cap) {
+        java.util.LinkedHashMap<Long, ChunkEntity> map = new java.util.LinkedHashMap<>();
+        for (ChunkEntity c : primary) map.putIfAbsent(c.getId(), c);
+        for (ChunkEntity c : fallback) map.putIfAbsent(c.getId(), c);
+        return map.values().stream().limit(cap).toList();
+    }
+
+    private List<Citation> filterCitationsByAnswer(String answer, List<Citation> citations) {
+        return citations.stream()
+                .filter(c -> answer.contains(c.filePath()))
+                .toList();
+    }
+
+    private List<Citation> mergeOverlappingCitations(List<Citation> citations) {
+        var byFile = citations.stream()
+                .collect(java.util.stream.Collectors.groupingBy(Citation::filePath));
+    
+        java.util.List<Citation> merged = new java.util.ArrayList<>();
+    
+        for (var entry : byFile.entrySet()) {
+            String file = entry.getKey();
+            var ranges = entry.getValue().stream()
+                    .sorted(java.util.Comparator.comparingInt(Citation::startLine))
+                    .toList();
+    
+            int curStart = -1, curEnd = -1;
+            java.util.List<String> snippets = new java.util.ArrayList<>();
+    
+            for (var c : ranges) {
+                if (curStart == -1) {
+                    curStart = c.startLine();
+                    curEnd = c.endLine();
+                    snippets.add(c.snippet());
+                    continue;
+                }
+    
+                if (c.startLine() <= curEnd + 1) {
+                    curEnd = Math.max(curEnd, c.endLine());
+                    snippets.add(c.snippet());
+                } else {
+                    merged.add(new Citation(file, curStart, curEnd, String.join("\n\n", snippets)));
+                    curStart = c.startLine();
+                    curEnd = c.endLine();
+                    snippets = new java.util.ArrayList<>();
+                    snippets.add(c.snippet());
+                }
+            }
+    
+            if (curStart != -1) {
+                merged.add(new Citation(file, curStart, curEnd, String.join("\n\n", snippets)));
+            }
+        }
+    
+        var fileOrder = citations.stream().map(Citation::filePath).distinct().toList();
+        merged.sort(java.util.Comparator.comparingInt(c -> fileOrder.indexOf(c.filePath())));
+        return merged;
+    }
+
+    private String buildConfidenceLine(String fileHint, List<ChunkEntity> chunks) {
+        long totalChunks = chunks.size();
+        var fileCounts = chunks.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        c -> c.getDocument().getFilePath(),
+                        java.util.stream.Collectors.counting()
+                ));
+    
+        long uniqueFiles = fileCounts.size();
+    
+        if (fileHint != null) {
+            long matched = fileCounts.entrySet().stream()
+                    .filter(e -> e.getKey().toLowerCase().contains(fileHint.toLowerCase()))
+                    .mapToLong(e -> e.getValue())
+                    .sum();
+    
+            return "Confidence: Used %d/%d retrieved chunks from **%s** (%d file(s) total)."
+                    .formatted(matched, totalChunks, fileHint, uniqueFiles);
+        }
+    
+        return "Confidence: Used %d retrieved chunks from %d file(s)."
+                .formatted(totalChunks, uniqueFiles);
     }
 
     private List<Citation> toCitations(List<ChunkEntity> chunks) {

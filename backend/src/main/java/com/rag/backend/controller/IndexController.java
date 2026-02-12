@@ -15,7 +15,6 @@ import java.io.IOException;
 @RestController
 @RequestMapping("/api")
 public class IndexController {
-
     private final IndexingService indexingService;
     private final ChunkEmbeddingService chunkEmbeddingService;
     private final RagRepoConfig ragRepoConfig;
@@ -66,13 +65,11 @@ public class IndexController {
 
         String rootPath = req.rootPath();
         
-        // If rootPath not provided, try to get it from RAG_REPO_ROOTS
         if (rootPath == null || rootPath.isBlank()) {
             if (!ragRepoConfig.hasRepoRoots()) {
                 return ResponseEntity.badRequest()
                         .body("rootPath is required when RAG_REPO_ROOTS is not configured");
             }
-            // Try to find a matching root by repo name, or use the first one
             rootPath = ragRepoConfig.findRepoRootForName(req.repoName());
             if (rootPath == null) {
                 return ResponseEntity.badRequest()
@@ -85,7 +82,6 @@ public class IndexController {
         try {
             IndexingService.IndexResult result = indexingService.indexFolder(req.repoName(), rootPath);
             
-            // Embed chunks for the newly indexed repo
             int chunksEmbedded = 0;
             String embeddingError = null;
             
@@ -107,7 +103,6 @@ public class IndexController {
                 }
             } catch (Exception e) {
                 embeddingError = "Embedding failed: " + e.getMessage();
-                // Log error but don't fail the entire indexing operation
                 System.err.println("Error embedding chunks for repo " + req.repoName() + ": " + e.getMessage());
                 e.printStackTrace();
             }

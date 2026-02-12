@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Chunker {
-
     public record Chunk(int chunkIndex, int startLine, int endLine, String content) {}
 
     private final int maxLines;
@@ -29,7 +28,6 @@ public class Chunker {
             int endExclusive = Math.min(start + maxLines, lines.size());
             String content = String.join("\n", lines.subList(start, endExclusive));
 
-            // line numbers as 1-based
             int startLine = start + 1;
             int endLine = endExclusive;
 
@@ -40,7 +38,6 @@ public class Chunker {
 
             start = Math.max(0, endExclusive - overlapLines);
         }
-
         return chunks;
     }
 }

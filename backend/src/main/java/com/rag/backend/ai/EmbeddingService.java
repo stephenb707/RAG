@@ -47,8 +47,6 @@ public class EmbeddingService {
         return out;
     }
 
-    // --- DTOs for JSON mapping ---
-
     public record EmbeddingRequest(String model, String input) {}
 
     public record EmbeddingResponse(List<EmbeddingData> data) {}

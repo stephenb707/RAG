@@ -78,9 +78,7 @@ public class IndexingService {
 
                 if (Files.isDirectory(p)) {
                     if (shouldIgnoreDir(p)) {
-                        // Skip subtree
-                        // Files.walk doesn't support skipping easily without FileVisitor,
-                        // but this simple filter is usually fine. We'll still avoid reading files under ignored dirs below.
+
                     }
                     continue;
                 }

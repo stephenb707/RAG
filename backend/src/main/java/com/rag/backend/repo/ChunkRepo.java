@@ -9,7 +9,6 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface ChunkRepo extends JpaRepository<ChunkEntity, Long> {
-
     @Modifying
     @Query(value = "UPDATE chunks SET embedding = CAST(:embedding AS vector) WHERE id = :id", nativeQuery = true)
     int updateEmbedding(@Param("id") Long id, @Param("embedding") String embedding);
@@ -22,6 +21,21 @@ public interface ChunkRepo extends JpaRepository<ChunkEntity, Long> {
         LIMIT :k
         """, nativeQuery = true)
     List<ChunkEntity> searchTopK(@Param("queryEmbedding") String queryEmbedding, @Param("k") int k);
+
+    @Query(value = """
+    SELECT c.*
+    FROM chunks c
+    INNER JOIN documents d ON c.document_id = d.id
+    WHERE c.embedding IS NOT NULL
+      AND d.file_path ILIKE CONCAT('%', :fileHint, '%')
+    ORDER BY c.embedding <-> CAST(:queryEmbedding AS vector), c.id
+    LIMIT :k
+    """, nativeQuery = true)
+    List<ChunkEntity> searchTopKInFile(
+        @Param("queryEmbedding") String queryEmbedding,
+        @Param("fileHint") String fileHint,
+        @Param("k") int k
+    );
 
     @Query(value = """
         SELECT *

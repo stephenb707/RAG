@@ -1,7 +1,7 @@
 -- Enable pgvector
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Track “indexing targets” (codebases / doc sets)
+-- Track repo
 CREATE TABLE IF NOT EXISTS repositories (
   id           BIGSERIAL PRIMARY KEY,
   name         TEXT NOT NULL,
@@ -19,9 +19,7 @@ CREATE TABLE IF NOT EXISTS documents (
   UNIQUE(repository_id, file_path)
 );
 
--- Chunks of each document (what we will embed later)
--- Choose a default embedding dimension now; you can change later.
--- 1536 is common for many embedding models.
+-- Chunks of each document
 CREATE TABLE IF NOT EXISTS chunks (
   id           BIGSERIAL PRIMARY KEY,
   document_id  BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
@@ -35,6 +33,5 @@ CREATE TABLE IF NOT EXISTS chunks (
   UNIQUE(document_id, chunk_index)
 );
 
--- Optional: useful indexes for later (not required, but harmless)
 CREATE INDEX IF NOT EXISTS idx_documents_repo ON documents(repository_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id);
