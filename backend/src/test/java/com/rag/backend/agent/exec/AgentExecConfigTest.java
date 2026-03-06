@@ -38,33 +38,37 @@ class AgentExecConfigTest {
     }
 
     @Test
-    void isAllowed_exactMatch_afterNormalize() {
-        assertThat(config.isAllowed(List.of("./mvnw", "-B", "test"))).isTrue();
-        assertThat(config.isAllowed(List.of("sh", "-lc", "echo START; sleep 2; echo END"))).isTrue();
+    void validateCommand_exactMatch_allowed() {
+        config.validateCommand(List.of("./mvnw", "-B", "test"));
+        config.validateCommand(List.of("sh", "-lc", "echo START; sleep 2; echo END"));
     }
 
     @Test
-    void isAllowed_normalizedWithTrim_matches() {
-        assertThat(config.isAllowed(List.of("  ./mvnw  ", "-B", "test"))).isTrue();
-        assertThat(config.isAllowed(List.of("sh", " -lc ", "echo START; sleep 2; echo END"))).isTrue();
+    void validateCommand_normalizedWithTrim_matches() {
+        config.validateCommand(List.of("  ./mvnw  ", "-B", "test"));
+        config.validateCommand(List.of("sh", " -lc ", "echo START; sleep 2; echo END"));
     }
 
     @Test
-    void isAllowed_mismatch_returnsFalse() {
-        assertThat(config.isAllowed(List.of("mvn", "test"))).isFalse();
-        assertThat(config.isAllowed(List.of("./mvnw", "-B"))).isFalse();
-        assertThat(config.isAllowed(List.of())).isFalse();
-        assertThat(config.isAllowed(null)).isFalse();
+    void validateCommand_disallowed_throws() {
+        assertThatThrownBy(() -> config.validateCommand(List.of("mvn", "test")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Command not allowed");
+        assertThatThrownBy(() -> config.validateCommand(List.of("./mvnw", "-B")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> config.validateCommand(List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> config.validateCommand(null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void validateCommand_notAllowed_throwsWithTokenizedAndAllowlist() {
+    void validateCommand_notAllowed_throwsWithTokenizedAndReason() {
         assertThatThrownBy(() -> config.validateCommand(List.of("curl", "http://evil.com")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Command not allowed")
                 .hasMessageContaining("Tokenized command:")
-                .hasMessageContaining("[curl, http://evil.com]")
-                .hasMessageContaining("allowed (parsed):");
+                .hasMessageContaining("[curl, http://evil.com]");
     }
 
     @Test

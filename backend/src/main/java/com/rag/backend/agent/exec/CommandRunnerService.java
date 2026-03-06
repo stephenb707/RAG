@@ -124,8 +124,25 @@ public class CommandRunnerService {
             String body = e.getResponseBodyAsString();
             throw new RunnerBadGatewayException(e.getStatusCode(), runnerPath, body, e);
         } catch (ResourceAccessException e) {
-            log.warn("runner timeout correlationId={}", correlationId, e);
-            throw new RunnerTimeoutException(correlationId, e);
+            String msg = String.valueOf(e.getMessage());
+            Throwable cause = e.getCause();
+        
+            boolean isTimeout =
+                    msg.contains("Read timed out") ||
+                    msg.contains("connect timed out") ||
+                    cause instanceof java.net.SocketTimeoutException;
+        
+            if (isTimeout) {
+                log.warn("runner timeout correlationId={}", correlationId, e);
+                throw new RunnerTimeoutException(correlationId, e);
+            }
+
+            throw new RunnerBadGatewayException(
+                    HttpStatus.BAD_GATEWAY,
+                    runnerPath,
+                    "Runner transport error: " + truncate(msg, 800),
+                    e
+            );
         } catch (RestClientException e) {
             throw new RunnerBadGatewayException(
                     HttpStatus.BAD_GATEWAY,

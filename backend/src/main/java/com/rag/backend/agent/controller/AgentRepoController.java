@@ -3,10 +3,12 @@ package com.rag.backend.agent.controller;
 import com.rag.backend.agent.dto.*;
 import com.rag.backend.agent.fs.RepoFsService;
 import com.rag.backend.agent.fs.RepoPatchService;
+import com.rag.backend.config.RagRepoConfig;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -16,10 +18,12 @@ public class AgentRepoController {
 
     private final RepoFsService repoFsService;
     private final RepoPatchService repoPatchService;
+    private final RagRepoConfig ragRepoConfig;
 
-    public AgentRepoController(RepoFsService repoFsService, RepoPatchService repoPatchService) {
+    public AgentRepoController(RepoFsService repoFsService, RepoPatchService repoPatchService, RagRepoConfig ragRepoConfig) {
         this.repoFsService = repoFsService;
         this.repoPatchService = repoPatchService;
+        this.ragRepoConfig = ragRepoConfig;
     }
 
     @PostMapping("/tree")
@@ -91,4 +95,65 @@ public class AgentRepoController {
         ApplyPatchResponse res = repoPatchService.apply(repoRoot, req);
         return ResponseEntity.ok(res);
     }
+
+    @GetMapping("/diag")
+    public ResponseEntity<RepoDiagResponse> diag(@RequestParam String repoName) {
+        if (repoName == null || repoName.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        var resolved = ragRepoConfig.resolveRepoRoot(repoName);
+        String resolvedRepoRoot = resolved.map(Path::toString).orElse(null);
+        boolean exists = resolved.isPresent();
+        List<String> baseRootsTried = ragRepoConfig.getTriedPathsForRepo(repoName);
+        return ResponseEntity.ok(new RepoDiagResponse(repoName, resolvedRepoRoot, exists, baseRootsTried));
+    }
+
+    @GetMapping("/exists")
+    public ResponseEntity<RepoExistsResponse> exists(
+            @RequestParam String repoName,
+            @RequestParam String path) {
+        if (repoName == null || repoName.isBlank() || path == null || path.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        Path repoRoot;
+        try {
+            repoRoot = repoFsService.resolveRepoRoot(repoName);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.ok(new RepoExistsResponse(
+                    repoName, null, path, null, false, false, false));
+        }
+        Path resolvedPath;
+        try {
+            resolvedPath = repoFsService.resolveSafePath(repoRoot, path);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.ok(new RepoExistsResponse(
+                    repoName, repoRoot.toString(), path, null, false, false, false));
+        }
+        boolean exists = Files.exists(resolvedPath) && Files.isRegularFile(resolvedPath);
+        boolean isAllowed = repoFsService.isAllowedFile(resolvedPath);
+        boolean isIgnored = repoFsService.isUnderIgnoredDir(repoRoot, resolvedPath);
+        return ResponseEntity.ok(new RepoExistsResponse(
+                repoName,
+                repoRoot.toString(),
+                path,
+                resolvedPath.toString(),
+                exists,
+                isAllowed,
+                isIgnored));
+    }
+
+    public record RepoDiagResponse(
+            String repoName,
+            String resolvedRepoRoot,
+            boolean exists,
+            List<String> baseRootsTried) {}
+
+    public record RepoExistsResponse(
+            String repoName,
+            String repoRoot,
+            String path,
+            String resolvedPath,
+            boolean exists,
+            boolean isAllowed,
+            boolean isIgnored) {}
 }

@@ -64,16 +64,16 @@ public class IndexController {
         }
 
         String rootPath = req.rootPath();
-        
+
         if (rootPath == null || rootPath.isBlank()) {
             if (!ragRepoConfig.hasRepoRoots()) {
                 return ResponseEntity.badRequest()
                         .body("rootPath is required when RAG_REPO_ROOTS is not configured");
             }
-            rootPath = ragRepoConfig.findRepoRootForName(req.repoName());
-            if (rootPath == null) {
-                return ResponseEntity.badRequest()
-                        .body("Could not determine rootPath from RAG_REPO_ROOTS for repo: " + req.repoName());
+            try {
+                rootPath = ragRepoConfig.resolveRepoRootOrThrow(req.repoName()).toString();
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(e.getMessage());
             }
         }
 

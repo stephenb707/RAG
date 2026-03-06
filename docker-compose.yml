@@ -24,19 +24,23 @@ services:
       dockerfile: Dockerfile
     container_name: rag-backend
     volumes:
-      - "${CODEBASE_PATH}:/repos/codebase:rw"
+      - "C:/Users/steph/OneDrive/Documents:/repos:rw"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ragdb
       SPRING_DATASOURCE_USERNAME: raguser
       SPRING_DATASOURCE_PASSWORD: ragpass
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      RAG_REPO_ROOTS: "/repos/codebase"
+      RAG_REPO_ROOTS: "/repos"
       AGENT_RUNNER_URL: "http://runner:8090"
       AGENT_RUNNER_BASE_URL: "http://runner:8090"
       AGENT_MAX_FILE_BYTES: "200000"
       AGENT_MAX_PATCH_FILES: "3"
-      AGENT_ALLOWED_COMMANDS: "./mvnw -B -ntp test|./mvnw -B -ntp -DskipTests package|sh -lc \"echo START; sleep 120; echo END\""
+      AGENT_ALLOWED_COMMANDS: ""
+      AGENT_ALLOWED_EXECUTABLES: "./mvnw"
+      AGENT_MVN_ALLOWED_GOALS: "test,verify,package"
+      AGENT_MVN_ALLOWED_FLAGS: "-B,-ntp,-DskipTests"
+      AGENT_MVN_ALLOWED_D_PROPS: "test"
       AGENT_COMMAND_TIMEOUT_SECONDS: "900"
       AGENT_COMMAND_MAX_OUTPUT_BYTES: "400000"
 
@@ -97,11 +101,11 @@ services:
       dockerfile: Dockerfile
     container_name: rag-runner
     volumes:
-      - "${CODEBASE_PATH}:/repos/codebase:rw"
+      - "C:/Users/steph/OneDrive/Documents:/repos:rw"
     environment:
-      RUNNER_REPO_ROOT: "/repos/codebase"
+      RUNNER_REPO_ROOT: "/repos"
       RUNNER_MAX_OUTPUT_BYTES: "400000"
-      RUNNER_TIMEOUT_SECONDS: "300"
+      RUNNER_TIMEOUT_SECONDS: "900"
     expose:
       - "8090"
     networks:

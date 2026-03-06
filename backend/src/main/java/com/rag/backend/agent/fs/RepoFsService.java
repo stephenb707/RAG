@@ -42,15 +42,7 @@ public class RepoFsService {
         if (!ragRepoConfig.hasRepoRoots()) {
             throw new IllegalArgumentException("RAG_REPO_ROOTS is not configured");
         }
-        String rootStr = ragRepoConfig.findRepoRootForName(repoName);
-        if (rootStr == null || rootStr.isBlank()) {
-            throw new IllegalArgumentException("Could not resolve repo root for: " + repoName);
-        }
-        Path root = Paths.get(rootStr).normalize().toAbsolutePath();
-        if (!Files.exists(root) || !Files.isDirectory(root)) {
-            throw new IllegalArgumentException("Repo root does not exist or is not a directory: " + root);
-        }
-        return root;
+        return ragRepoConfig.resolveRepoRootOrThrow(repoName);
     }
 
     public Path resolveSafePath(Path repoRoot, String relativePath) {

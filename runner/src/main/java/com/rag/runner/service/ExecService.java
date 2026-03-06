@@ -1,5 +1,6 @@
 package com.rag.runner.service;
 
+import com.rag.runner.config.RunnerRepoConfig;
 import com.rag.runner.dto.ExecRunRequest;
 import com.rag.runner.dto.ExecRunResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +16,7 @@ import java.util.concurrent.*;
 
 @Service
 public class ExecService {
+    private final RunnerRepoConfig repoConfig;
 
     @Value("${RUNNER_REPO_ROOT:/repos/codebase}")
     private String runnerRepoRoot;
@@ -22,8 +24,12 @@ public class ExecService {
     @Value("${RUNNER_MAX_OUTPUT_BYTES:400000}")
     private int maxOutputBytes;
 
-    @Value("${RUNNER_TIMEOUT_SECONDS:300}")
+    @Value("${RUNNER_TIMEOUT_SECONDS:900}")
     private int timeoutSeconds;
+
+    public ExecService(RunnerRepoConfig repoConfig) {
+        this.repoConfig = repoConfig;
+    }
 
     public ExecRunResponse run(ExecRunRequest req) throws Exception {
         if (req == null) throw new IllegalArgumentException("request is required");
@@ -31,8 +37,8 @@ public class ExecService {
             throw new IllegalArgumentException("command is required");
         }
 
-        Path repoRoot = resolveRepoRoot();
-        Path workingDir = resolveWorkingDir(repoRoot, req.workingDir());
+        Path repoRoot = repoConfig.resolveRepoRootOrThrow(req.repoName());
+        Path workingDir = repoRoot.resolve(req.workingDir()).normalize();
 
         Instant start = Instant.now();
 
@@ -85,31 +91,6 @@ public class ExecService {
                 stderr,
                 truncated
         );
-    }
-
-    private Path resolveRepoRoot() {
-        Path root = Paths.get(runnerRepoRoot).normalize().toAbsolutePath();
-        if (!Files.exists(root) || !Files.isDirectory(root)) {
-            throw new IllegalArgumentException("RUNNER_REPO_ROOT does not exist or is not a directory: " + root);
-        }
-        return root;
-    }
-
-    private Path resolveWorkingDir(Path repoRoot, String workingDir) {
-        String rel = (workingDir == null || workingDir.isBlank()) ? "" : workingDir;
-
-        if (rel.contains("..") || rel.contains("~") || rel.contains("\\")) {
-            throw new IllegalArgumentException("Invalid workingDir");
-        }
-
-        Path resolved = repoRoot.resolve(rel).normalize().toAbsolutePath();
-        if (!resolved.startsWith(repoRoot)) {
-            throw new IllegalArgumentException("workingDir escapes repo root");
-        }
-        if (!Files.exists(resolved) || !Files.isDirectory(resolved)) {
-            throw new IllegalArgumentException("workingDir does not exist or is not a directory: " + rel);
-        }
-        return resolved;
     }
 
     private static StreamCapture readBounded(InputStream is, int maxBytes) throws Exception {

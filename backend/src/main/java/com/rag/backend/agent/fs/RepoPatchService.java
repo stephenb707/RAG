@@ -5,6 +5,8 @@ import com.rag.backend.agent.dto.ApplyPatchResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,7 +34,7 @@ public class RepoPatchService {
         this.maxPatchFiles = maxPatchFiles;
     }
 
-    public ApplyPatchResponse apply(Path repoRoot, ApplyPatchRequest req) throws Exception {
+    public ApplyPatchResponse apply(Path repoRoot, ApplyPatchRequest req) {
         if (req == null) {
             throw new IllegalArgumentException("request body is required");
         }
@@ -65,7 +67,11 @@ public class RepoPatchService {
 
             String beforeHash = null;
             if (exists) {
-                beforeHash = sha256Hex(Files.readAllBytes(file));
+                try {
+                    beforeHash = sha256Hex(Files.readAllBytes(file));
+                } catch (IOException ioe) {
+                    throw new UncheckedIOException("Failed to apply patch for " + ch.path(), ioe);
+                }
                 if (ch.expectedSha256() == null || ch.expectedSha256().isBlank()) {
                     throw new IllegalArgumentException("expectedSha256 is required for existing file: " + ch.path());
                 }
@@ -80,7 +86,11 @@ public class RepoPatchService {
                 }
                 Path parent = file.getParent();
                 if (parent != null) {
-                    Files.createDirectories(parent);
+                    try {
+                        Files.createDirectories(parent);
+                    } catch (IOException ioe) {
+                        throw new UncheckedIOException("Failed to apply patch for " + ch.path(), ioe);
+                    }
                 }
                 created = true;
             }
@@ -90,7 +100,11 @@ public class RepoPatchService {
                 throw new IllegalArgumentException("File too large (" + newBytes.length + " bytes) for: " + ch.path());
             }
 
-            Files.write(file, newBytes);
+            try {
+                Files.write(file, newBytes);
+            } catch (IOException ioe) {
+                throw new UncheckedIOException("Failed to apply patch for " + ch.path(), ioe);
+            }
             String afterHash = sha256Hex(newBytes);
 
             results.add(new ApplyPatchResponse.FileResult(
@@ -105,9 +119,13 @@ public class RepoPatchService {
         return new ApplyPatchResponse(req.repoName(), results.size(), results);
     }
 
-    private static String sha256Hex(byte[] bytes) throws Exception {
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        byte[] digest = md.digest(bytes);
-        return HexFormat.of().formatHex(digest);
+    private static String sha256Hex(byte[] bytes) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(bytes);
+            return HexFormat.of().formatHex(digest);
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to compute sha256", e);
+        }
     }
 }
