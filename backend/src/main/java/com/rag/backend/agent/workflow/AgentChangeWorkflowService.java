@@ -19,6 +19,9 @@ import java.util.stream.Collectors;
 @Service
 public class AgentChangeWorkflowService {
 
+    private static final int MAX_PROPOSED_FILES = 3;
+    private static final int MAX_PROPOSED_FILES_LEGACY = 8;
+
     private final RepoFsService repoFsService;
     private final RepoPatchService repoPatchService;
     private final CommandRunnerService commandRunnerService;
@@ -52,7 +55,7 @@ public class AgentChangeWorkflowService {
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
                 .distinct()
-                .limit(8)
+                .limit(MAX_PROPOSED_FILES_LEGACY)
                 .toList();
 
         Path repoRoot = repoFsService.resolveRepoRoot(repoName);
@@ -61,7 +64,7 @@ public class AgentChangeWorkflowService {
             beforeFiles.put(p, repoFsService.readFile(repoRoot, p));
         }
 
-        List<AgentChangeWorkflowResponse.ProposedEdit> proposed = proposeEdits(goal, beforeFiles);
+        List<AgentChangeWorkflowResponse.ProposedEdit> proposed = proposeEditsAndPlan(goal, beforeFiles).edits();
 
         ApplyPatchRequest applyReq = toApplyPatchRequest(repoName, proposed, beforeFiles);
         ApplyPatchResponse applyResp = repoPatchService.apply(repoRoot, applyReq);
@@ -120,11 +123,17 @@ public class AgentChangeWorkflowService {
         );
     }
 
-    private List<AgentChangeWorkflowResponse.ProposedEdit> proposeEdits(
-            String goal,
-            Map<String, RepoFsService.ReadFileData> beforeFiles
-    ) throws IOException {
+    private record ProposeResult(String plan, List<AgentChangeWorkflowResponse.ProposedEdit> edits) {}
 
+    private ProposeResult proposeEditsAndPlan(String goal, Map<String, RepoFsService.ReadFileData> beforeFiles) throws IOException {
+        return proposeEditsAndPlan(goal, beforeFiles, true);
+    }
+
+    private ProposeResult proposeEditsAndPlan(
+            String goal,
+            Map<String, RepoFsService.ReadFileData> beforeFiles,
+            boolean allowCreate
+    ) throws IOException {
         StringBuilder ctx = new StringBuilder();
         ctx.append("Goal:\n").append(goal).append("\n\n");
         if (!beforeFiles.isEmpty()) {
@@ -134,31 +143,28 @@ public class AgentChangeWorkflowService {
                 ctx.append(String.join("\n", e.getValue().lines())).append("\n\n");
             }
         }
-
         String system = String.join("\n",
                 "You are an expert software engineer.",
                 "Propose code edits to accomplish the Goal.",
                 "Return STRICT JSON only (no markdown).",
                 "Schema:",
-                "{ \"edits\": [ {\"path\": \"relative/path.ext\", \"rationale\": \"...\", \"newContent\": \"FULL FILE CONTENT\" } ] }",
+                "{ \"plan\": \"short plan (optional)\", \"edits\": [ {\"path\": \"relative/path.ext\", \"rationale\": \"...\", \"newContent\": \"FULL FILE CONTENT\" } ] }",
                 "Rules:",
                 "- Provide full file contents (not a patch).",
                 "- Only modify files that were provided in the context, unless you truly must add a new file.",
                 "- Keep changes minimal and safe.",
                 "- If no changes are needed, return {\"edits\": []}."
         );
-
-        String systemPrompt = system;
-        String userPrompt = ctx.toString();
-        String raw = llm.chat(systemPrompt, userPrompt);
-
+        String raw = llm.chat(system, ctx.toString());
         String cleaned = JsonExtraction.extractJson(raw);
         Map<String, Object> parsed = objectMapper.readValue(cleaned, new TypeReference<>() {});
+        String plan = asString(parsed.get("plan"));
+        if (plan != null) plan = plan.trim();
+        if (plan == null || plan.isBlank()) plan = "Proposed edits to accomplish goal.";
         Object editsObj = parsed.get("edits");
         if (!(editsObj instanceof List<?> list)) {
             throw new IllegalArgumentException("LLM did not return expected JSON with 'edits' list.");
         }
-
         List<AgentChangeWorkflowResponse.ProposedEdit> out = new ArrayList<>();
         for (Object o : list) {
             if (!(o instanceof Map<?,?> m)) continue;
@@ -168,15 +174,60 @@ public class AgentChangeWorkflowService {
             if (path == null || path.isBlank() || newContent == null) continue;
             out.add(new AgentChangeWorkflowResponse.ProposedEdit(path.trim(), rationale == null ? "" : rationale.trim(), newContent));
         }
+        if (out.size() > MAX_PROPOSED_FILES) out = out.subList(0, MAX_PROPOSED_FILES);
+        return new ProposeResult(plan, out);
+    }
 
-        if (out.size() > 3) out = out.subList(0, 3);
-        return out;
+    /** Generates a proposal without writing files. Used by propose-then-apply workflow. */
+    public ProposalGenerationResult proposeOnly(AgentProposeWorkflowRequest req) throws IOException {
+        String repoName = require(req.repoName(), "repoName");
+        String goal = require(req.goal(), "goal");
+        boolean allowCreate = Boolean.TRUE.equals(req.allowCreate());
+        List<String> seedPaths = (req.seedFilePaths() == null) ? List.of() : req.seedFilePaths().stream()
+                .filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).distinct().limit(MAX_PROPOSED_FILES_LEGACY).toList();
+        Path repoRoot = repoFsService.resolveRepoRoot(repoName);
+        Map<String, RepoFsService.ReadFileData> beforeFiles = new LinkedHashMap<>();
+        for (String p : seedPaths) {
+            try {
+                beforeFiles.put(p, repoFsService.readFile(repoRoot, p));
+            } catch (Exception e) {
+                if (!allowCreate) throw e;
+            }
+        }
+        ProposeResult proposeResult = proposeEditsAndPlan(goal, beforeFiles, allowCreate);
+        List<AgentChangeWorkflowResponse.ProposedEdit> proposed = proposeResult.edits();
+        if (proposed.isEmpty()) {
+            return new ProposalGenerationResult(proposeResult.plan(), List.of(), List.of(), List.of());
+        }
+        ApplyPatchRequest applyReq = toApplyPatchRequest(repoName, proposed, beforeFiles, allowCreate);
+        List<AgentProposalResponse.DiffSummaryItem> diffSummaries = new ArrayList<>();
+        for (AgentChangeWorkflowResponse.ProposedEdit e : proposed) {
+            String path = e.path();
+            RepoFsService.ReadFileData before = beforeFiles.get(path);
+            String beforeContent = before == null ? "" : String.join("\n", before.lines());
+            String beforeSha = before == null ? "" : before.sha256();
+            String afterContent = e.newContent();
+            String afterSha = sha256Hex(afterContent);
+            DiffSummaryService.DiffSummary d = diffSummaryService.summarize(path, beforeContent, beforeSha, afterContent, afterSha);
+            diffSummaries.add(new AgentProposalResponse.DiffSummaryItem(
+                    d.path(), d.beforeSha256(), d.afterSha256(), d.addedLines(), d.removedLines(), d.diffSnippet()));
+        }
+        return new ProposalGenerationResult(proposeResult.plan(), proposed, applyReq.changes(), diffSummaries);
     }
 
     private ApplyPatchRequest toApplyPatchRequest(
             String repoName,
             List<AgentChangeWorkflowResponse.ProposedEdit> proposed,
             Map<String, RepoFsService.ReadFileData> beforeFiles
+    ) {
+        return toApplyPatchRequest(repoName, proposed, beforeFiles, true);
+    }
+
+    private ApplyPatchRequest toApplyPatchRequest(
+            String repoName,
+            List<AgentChangeWorkflowResponse.ProposedEdit> proposed,
+            Map<String, RepoFsService.ReadFileData> beforeFiles,
+            boolean allowCreate
     ) {
         List<ApplyPatchRequest.PatchChange> changes = proposed.stream()
                 .map(e -> {
@@ -185,8 +236,7 @@ public class AgentChangeWorkflowService {
                     return new ApplyPatchRequest.PatchChange(e.path(), expectedSha, e.newContent());
                 })
                 .collect(Collectors.toList());
-
-        return new ApplyPatchRequest(repoName, true, changes);
+        return new ApplyPatchRequest(repoName, allowCreate, changes);
     }
 
     private static String buildSummary(

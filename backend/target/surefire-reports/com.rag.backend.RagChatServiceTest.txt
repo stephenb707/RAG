@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
 Test set: com.rag.backend.RagChatServiceTest
 -------------------------------------------------------------------------------
-Tests run: 2, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.048 s <<< FAILURE! -- in com.rag.backend.RagChatServiceTest
-com.rag.backend.RagChatServiceTest.answerQuestion_whenNoChunks_returnsEmptyCitations_stillCallsLLM -- Time elapsed: 0.032 s <<< FAILURE!
+Tests run: 2, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.095 s <<< FAILURE! -- in com.rag.backend.RagChatServiceTest
+com.rag.backend.RagChatServiceTest.answerQuestion_whenNoChunks_returnsEmptyCitations_stillCallsLLM -- Time elapsed: 0.057 s <<< FAILURE!
 java.lang.AssertionError: 
 
 Expecting actual:
@@ -17,7 +17,7 @@ to contain:
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 
-com.rag.backend.RagChatServiceTest.answerQuestion_embeds_retrieves_buildsPrompt_callsLLM_returnsAnswerAndCitations -- Time elapsed: 0.015 s <<< FAILURE!
+com.rag.backend.RagChatServiceTest.answerQuestion_embeds_retrieves_buildsPrompt_callsLLM_returnsAnswerAndCitations -- Time elapsed: 0.029 s <<< FAILURE!
 java.lang.AssertionError: 
 
 Expected size: 2 but was: 0 in:

@@ -1,11 +1,16 @@
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\EmbeddingBackfillIT.java
+C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\proposal\AgentProposalStoreServiceTest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\RagChatServiceTest.java
+C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\verification\AgentVerificationServiceTest.java
+C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\controller\AgentProposalControllerTest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\ChatControllerIT.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\RetrieveEndpointIT.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\VectorSearchIT.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\ChatControllerArchitectureIT.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\AgentExecIT.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\exec\AgentExecConfigTest.java
+C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\workflow\AgentProposalWorkflowServiceTest.java
+C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\proposal\ProposalRiskFlagsTest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\run\AgentRunStoreServiceTest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\ChatControllerWebTest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\ChatControllerCodeReviewIT.java
