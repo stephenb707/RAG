@@ -3,7 +3,6 @@ package com.rag.backend.agent.exec;
 import com.rag.backend.agent.dto.ExecRunRequest;
 import com.rag.backend.agent.dto.ExecRunResponse;
 import com.rag.backend.agent.fs.RepoFsService;
-import com.rag.backend.config.RagRepoConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +33,6 @@ public class CommandRunnerService {
     private final ObjectMapper objectMapper;
 
     public CommandRunnerService(
-            RagRepoConfig ragRepoConfig,
             RepoFsService repoFsService,
             AgentExecConfig execConfig,
             @Qualifier("agentRunnerRestClient") RestClient runnerClient,

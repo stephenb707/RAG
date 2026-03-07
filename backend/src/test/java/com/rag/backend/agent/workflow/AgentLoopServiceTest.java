@@ -6,6 +6,7 @@ import com.rag.backend.agent.dto.AgentLoopResponse;
 import com.rag.backend.agent.exec.CommandRunnerService;
 import com.rag.backend.agent.fs.RepoFsService;
 import com.rag.backend.agent.fs.RepoPatchService;
+import com.rag.backend.agent.run.AgentRunStoreService;
 import com.rag.backend.ai.OpenAIChatClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,13 +35,16 @@ class AgentLoopServiceTest {
     private CommandRunnerService commandRunnerService;
     @Mock
     private OpenAIChatClient llm;
+    @Mock
+    private AgentRunStoreService runStore;
 
     private AgentLoopService service;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() throws IOException {
-        service = new AgentLoopService(repoFsService, repoPatchService, commandRunnerService, llm, objectMapper);
+        service = new AgentLoopService(repoFsService, repoPatchService, commandRunnerService, llm, objectMapper, runStore);
+        when(runStore.createRun(anyString(), anyString(), anyString())).thenAnswer(inv -> UUID.randomUUID().toString());
         Path repoRoot = Path.of("/repos/test-repo");
         when(repoFsService.resolveRepoRoot("test-repo")).thenReturn(repoRoot);
     }
@@ -73,6 +78,7 @@ class AgentLoopServiceTest {
 
         AgentLoopResponse response = service.run(req);
 
+        assertThat(response.runId()).isNotNull();
         assertThat(response.status()).isEqualTo("finished");
         assertThat(response.finalSummary()).isEqualTo("Listed and read files.");
         assertThat(response.iterations()).hasSize(3);

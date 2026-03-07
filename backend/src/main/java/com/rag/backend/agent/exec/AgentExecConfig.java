@@ -169,7 +169,6 @@ public class AgentExecConfig {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    // Exact allowlist parsing: pipe-separated commands, each command tokenized (supports quotes)
     private static List<List<String>> parseAllowedExact(String raw) {
         if (raw == null || raw.isBlank()) return List.of();
 

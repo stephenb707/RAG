@@ -16,17 +16,17 @@ import java.util.Map;
 @RequestMapping("/api/agent/workflow")
 public class AgentWorkflowController {
 
-    private final AgentChangeWorkflowService diffService;
+    private final AgentChangeWorkflowService changeWorkflowService;
     private final AgentLoopService agentLoopService;
 
-    public AgentWorkflowController(AgentChangeWorkflowService diffService, AgentLoopService agentLoopService) {
-        this.diffService = diffService;
+    public AgentWorkflowController(AgentChangeWorkflowService changeWorkflowService, AgentLoopService agentLoopService) {
+        this.changeWorkflowService = changeWorkflowService;
         this.agentLoopService = agentLoopService;
     }
 
     @PostMapping("/change")
     public ResponseEntity<AgentChangeWorkflowResponse> runChangeWorkflow(@RequestBody AgentChangeWorkflowRequest request) throws IOException {
-        return ResponseEntity.ok(diffService.run(request));
+        return ResponseEntity.ok(changeWorkflowService.run(request));
     }
 
     @PostMapping("/loop")

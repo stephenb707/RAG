@@ -19,16 +19,13 @@ public class IndexingService {
     private final DocumentRepo documentRepo;
     private final ChunkRepo chunkRepo;
 
-    // Phase 3 tuning knobs
     private final Chunker chunker = new Chunker(120, 20);
 
-    // Ignore folders common in codebases
     private static final Set<String> IGNORE_DIRS = Set.of(
             ".git", ".next", "node_modules", "target", "build", "dist", "out",
             ".idea", ".vscode", ".gradle", ".mvn"
     );
 
-    // Keep this conservative to avoid indexing binaries
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
             "java", "kt", "groovy",
             "js", "ts", "tsx", "jsx",
@@ -100,11 +97,9 @@ public class IndexingService {
                 try {
                     lines = Files.readAllLines(p, StandardCharsets.UTF_8);
                 } catch (MalformedInputException mie) {
-                    // Non-UTF8 or binary-ish file, skip.
                     filesSkipped++;
                     continue;
                 } catch (Exception ex) {
-                    // Skip unreadable files
                     filesSkipped++;
                     continue;
                 }

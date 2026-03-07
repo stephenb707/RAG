@@ -29,7 +29,6 @@ public class RagRepoConfig {
         return repoRoots;
     }
 
-    /** Base roots as Paths for resolution. Same as repoRoots but as Path list. */
     public List<Path> getBaseRepoRoots() {
         return repoRoots.stream()
                 .map(Paths::get)
@@ -46,19 +45,12 @@ public class RagRepoConfig {
         return repoRoots.isEmpty() ? null : repoRoots.get(0);
     }
 
-    /** @deprecated Use resolveRepoRoot(String) or resolveRepoRootOrThrow(String) for scalable resolution. */
     @Deprecated
     public String findRepoRootForName(String repoName) {
         Optional<Path> resolved = resolveRepoRoot(repoName);
         return resolved.map(Path::toString).orElse(null);
     }
 
-    /**
-     * Resolve repoName to an absolute repo root directory.
-     * 1) Direct mapping: if a configured root equals or ends with /repoName and exists, use it.
-     * 2) Base + repo: for each base root, try baseRoot/repoName if it exists.
-     * 3) Otherwise throws with tried paths.
-     */
     public Optional<Path> resolveRepoRoot(String repoName) {
         if (repoName == null || repoName.isBlank()) {
             return Optional.empty();
@@ -68,7 +60,6 @@ public class RagRepoConfig {
         }
         List<String> tried = new ArrayList<>();
 
-        // 1) Direct mapping (backwards compatibility)
         for (String rootStr : repoRoots) {
             if (rootStr.equals(repoName) || rootStr.endsWith("/" + repoName)) {
                 Path candidate = Paths.get(rootStr).normalize().toAbsolutePath();
@@ -79,7 +70,6 @@ public class RagRepoConfig {
             }
         }
 
-        // 2) Base root + repoName
         for (String rootStr : repoRoots) {
             Path base = Paths.get(rootStr).normalize().toAbsolutePath();
             Path candidate = base.resolve(repoName).normalize().toAbsolutePath();
@@ -92,9 +82,6 @@ public class RagRepoConfig {
         return Optional.empty();
     }
 
-    /**
-     * Resolve repoName to repo root. Throws with clear error including tried paths.
-     */
     public Path resolveRepoRootOrThrow(String repoName) {
         Optional<Path> resolved = resolveRepoRoot(repoName);
         if (resolved.isPresent()) {
@@ -112,7 +99,6 @@ public class RagRepoConfig {
                 "Could not resolve repo root for: " + repoName + ". Tried: " + tried);
     }
 
-    /** Return list of paths we tried for diagnostics. */
     public List<String> getTriedPathsForRepo(String repoName) {
         if (repoName == null || repoName.isBlank() || repoRoots.isEmpty()) {
             return List.of();

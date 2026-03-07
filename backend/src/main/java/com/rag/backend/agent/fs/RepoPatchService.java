@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 
-//Apply small, safe file-based patches scoped to a repo root.
 @Service
 public class RepoPatchService {
 

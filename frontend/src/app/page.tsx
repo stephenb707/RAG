@@ -24,8 +24,6 @@ export default function Home() {
   const [indexLoading, setIndexLoading] = useState(false)
   const [indexResult, setIndexResult] = useState<IndexResponse | null>(null)
   const [indexError, setIndexError] = useState<string | null>(null)
-  
-  // Status state
   const [status, setStatus] = useState<StatusResponse | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
 
@@ -84,7 +82,6 @@ export default function Home() {
     try {
       const result = await postIndex(repoName.trim(), rootPath.trim() || undefined)
       setIndexResult(result)
-      // Reload status after indexing
       await loadStatus()
     } catch (error) {
       console.error('Error indexing:', error)
@@ -101,7 +98,6 @@ export default function Home() {
     try {
       const result = await postReindex()
       setReindexMessage(result || 'Reindex started successfully')
-      // Reload status after reindexing
       await loadStatus()
     } catch (error) {
       console.error('Error reindexing:', error)
@@ -228,7 +224,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Index Repo Section */}
       <div
         style={{
           padding: '20px',

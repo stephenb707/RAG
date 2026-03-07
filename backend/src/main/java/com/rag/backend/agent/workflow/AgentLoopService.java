@@ -6,6 +6,12 @@ import com.rag.backend.agent.dto.*;
 import com.rag.backend.agent.exec.CommandRunnerService;
 import com.rag.backend.agent.fs.RepoFsService;
 import com.rag.backend.agent.fs.RepoPatchService;
+import com.rag.backend.agent.run.AgentRunIterationRecord;
+import com.rag.backend.agent.run.AgentRunStoreService;
+import com.rag.backend.agent.run.PatchResultRecord;
+import com.rag.backend.agent.run.PatchedFileRecord;
+import com.rag.backend.agent.run.ToolCallRecord;
+import com.rag.backend.agent.run.VerificationResultRecord;
 import com.rag.backend.agent.util.JsonExtraction;
 import com.rag.backend.ai.OpenAIChatClient;
 import org.slf4j.Logger;
@@ -14,22 +20,10 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Agent loop orchestrator: Observe → Think → Act → Verify → Summarize.
- *
- * HOW TO CALL:
- *   POST /api/agent/workflow/loop
- *   Body (JSON): { "repoName": "my-repo", "goal": "Add a unit test for X", "workingDir": ".", "seedFilePaths": ["src/..."], "maxIterations": 6, "maxToolCalls": 25, "allowCreate": false }
- *   Example curl: curl -X POST http://localhost:8080/api/agent/workflow/loop -H "Content-Type: application/json" -d "{\"repoName\":\"RAG\",\"goal\":\"List Java files\"}"
- *   Example PowerShell: Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/agent/workflow/loop" -ContentType "application/json" -Body '{"repoName":"RAG","goal":"List Java files"}'
- *
- * RESPONSE FIELDS:
- *   repoName, workingDir, goal, iterations[], finalSummary, status ("finished"|"max_iterations"|"error")
- *   Each iteration: index, decision (mode/tool/args/edits/etc), toolCallName, toolCallArgs, toolResultSummary, appliedPatchResult, testRun, errors
- */
 @Service
 public class AgentLoopService {
 
@@ -41,25 +35,30 @@ public class AgentLoopService {
     private static final int DEFAULT_MAX_ITERATIONS = 6;
     private static final int DEFAULT_MAX_TOOL_CALLS = 25;
     private static final List<String> DEFAULT_TEST_COMMAND = List.of("./mvnw", "-B", "-ntp", "test");
+    private static final int TOOL_RESULT_MAX_LENGTH = 2000;
+    private static final int VERIFICATION_OUTPUT_MAX_LENGTH = 2000;
 
     private final RepoFsService repoFsService;
     private final RepoPatchService repoPatchService;
     private final CommandRunnerService commandRunnerService;
     private final OpenAIChatClient llm;
     private final ObjectMapper objectMapper;
+    private final AgentRunStoreService runStore;
 
     public AgentLoopService(
             RepoFsService repoFsService,
             RepoPatchService repoPatchService,
             CommandRunnerService commandRunnerService,
             OpenAIChatClient llm,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            AgentRunStoreService runStore
     ) {
         this.repoFsService = repoFsService;
         this.repoPatchService = repoPatchService;
         this.commandRunnerService = commandRunnerService;
         this.llm = llm;
         this.objectMapper = objectMapper;
+        this.runStore = runStore;
     }
 
     public AgentLoopResponse run(AgentLoopRequest req) throws IOException {
@@ -71,6 +70,9 @@ public class AgentLoopService {
         boolean allowCreate = Boolean.TRUE.equals(req.allowCreate());
 
         Path repoRoot = repoFsService.resolveRepoRoot(repoName);
+        String runId = runStore.createRun(repoName, workingDir, goal);
+
+        try {
         List<AgentLoopResponse.Iteration> iterations = new ArrayList<>();
         StringBuilder transcript = new StringBuilder();
         int filesReadCount = 0;
@@ -136,7 +138,8 @@ public class AgentLoopService {
                 finalSummary = decision.finalSummary() != null ? decision.finalSummary().trim() : "";
                 status = "finished";
                 appendToTranscript(transcript, "Decision: finish. Summary: " + truncate(finalSummary, 2000) + "\n");
-                iterations.add(new AgentLoopResponse.Iteration(i, decision, null, null, null, null, null, errors));
+                iterations.add(new AgentLoopResponse.Iteration(i, decision, null, null, null, null, null, null, errors));
+                persistIteration(runId, iterations.get(iterations.size() - 1));
                 break;
             }
 
@@ -145,7 +148,8 @@ public class AgentLoopService {
                 if (toolCallsCount > maxToolCalls) {
                     errors.add("max_tool_calls exceeded");
                     status = "max_iterations";
-                    iterations.add(new AgentLoopResponse.Iteration(i, decision, decision.tool(), decision.args(), null, null, null, errors));
+                    iterations.add(new AgentLoopResponse.Iteration(i, decision, decision.tool(), decision.args(), null, null, null, null, errors));
+                    persistIteration(runId, iterations.get(iterations.size() - 1));
                     break;
                 }
                 toolCallName = decision.tool();
@@ -163,7 +167,8 @@ public class AgentLoopService {
                     errors.add(msg != null ? msg : ex.getClass().getSimpleName());
                     appendToTranscript(transcript, "Tool " + toolCallName + " error: " + msg + "\n");
                 }
-                iterations.add(new AgentLoopResponse.Iteration(i, decision, toolCallName, toolCallArgs, toolResultSummary, null, null, errors));
+                iterations.add(new AgentLoopResponse.Iteration(i, decision, toolCallName, toolCallArgs, toolResultSummary, null, null, null, errors));
+                persistIteration(runId, iterations.get(iterations.size() - 1));
                 continue;
             }
 
@@ -203,7 +208,8 @@ public class AgentLoopService {
                         appendToTranscript(transcript, "Apply patch error: " + msg + "\n");
                     }
                 }
-                iterations.add(new AgentLoopResponse.Iteration(i, decision, null, null, toolResultSummary, appliedPatchResult, null, errors));
+                iterations.add(new AgentLoopResponse.Iteration(i, decision, null, null, toolResultSummary, appliedPatchResult, null, null, errors));
+                persistIteration(runId, iterations.get(iterations.size() - 1));
                 continue;
             }
 
@@ -220,15 +226,82 @@ public class AgentLoopService {
                     errors.add(msg != null ? msg : ex.getClass().getSimpleName());
                     appendToTranscript(transcript, "Verify error: " + msg + "\n");
                 }
-                iterations.add(new AgentLoopResponse.Iteration(i, decision, null, null, toolResultSummary, null, testRun, errors));
+                iterations.add(new AgentLoopResponse.Iteration(i, decision, null, null, toolResultSummary, null, testRun, testCmd, errors));
+                persistIteration(runId, iterations.get(iterations.size() - 1));
                 continue;
             }
 
             errors.add("unknown mode: " + mode);
-            iterations.add(new AgentLoopResponse.Iteration(i, decision, null, null, null, null, null, errors));
+            iterations.add(new AgentLoopResponse.Iteration(i, decision, null, null, null, null, null, null, errors));
+            persistIteration(runId, iterations.get(iterations.size() - 1));
         }
 
-        return new AgentLoopResponse(repoName, workingDir, goal, iterations, finalSummary, status);
+        runStore.finishRun(runId, status, finalSummary);
+        return new AgentLoopResponse(runId, repoName, workingDir, goal, iterations, finalSummary, status);
+        } catch (Exception e) {
+            String msg = e.getMessage();
+            runStore.finishRun(runId, "error", msg != null ? truncate(msg, 500) : e.getClass().getSimpleName());
+            if (e instanceof IOException io) throw io;
+            if (e instanceof RuntimeException re) throw re;
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void persistIteration(String runId, AgentLoopResponse.Iteration it) {
+        String decisionJson = null;
+        try {
+            if (it.decision() != null) decisionJson = objectMapper.writeValueAsString(it.decision());
+        } catch (JsonProcessingException ignored) {}
+
+        ToolCallRecord toolCall = null;
+        if (it.toolCallName() != null) {
+            String summary = it.toolResultSummary();
+            boolean truncated = summary != null && summary.length() > TOOL_RESULT_MAX_LENGTH;
+            String bounded = truncate(summary, TOOL_RESULT_MAX_LENGTH);
+            toolCall = new ToolCallRecord(it.toolCallName(), it.toolCallArgs(), bounded, truncated);
+        }
+
+        PatchResultRecord patchResult = null;
+        if (it.appliedPatchResult() != null) {
+            var r = it.appliedPatchResult();
+            String summary = "Applied " + r.appliedCount() + " file(s)" + (r.results() != null && !r.results().isEmpty()
+                    ? ": " + r.results().stream().map(ApplyPatchResponse.FileResult::path).collect(Collectors.joining(", "))
+                    : "");
+            List<PatchedFileRecord> files = r.results() != null
+                    ? r.results().stream()
+                    .map(f -> new PatchedFileRecord(f.path(), f.created(), f.beforeSha256(), f.afterSha256(), f.bytesWritten(), null))
+                    .toList()
+                    : List.of();
+            patchResult = new PatchResultRecord(truncate(summary, 500), files);
+        }
+
+        VerificationResultRecord verificationResult = null;
+        if (it.testRun() != null) {
+            var run = it.testRun();
+            String stdoutSummary = truncate(run.stdout(), VERIFICATION_OUTPUT_MAX_LENGTH);
+            String stderrSummary = truncate(run.stderr(), VERIFICATION_OUTPUT_MAX_LENGTH);
+            verificationResult = new VerificationResultRecord(
+                    it.verifyCommand() != null ? List.copyOf(it.verifyCommand()) : null,
+                    run.exitCode(),
+                    run.durationMs(),
+                    stdoutSummary,
+                    stderrSummary,
+                    run.truncated()
+            );
+        }
+
+        AgentRunIterationRecord record = new AgentRunIterationRecord(
+                it.index(),
+                Instant.now().toString(),
+                it.decision() != null ? it.decision().mode() : null,
+                it.decision() != null ? it.decision().plan() : null,
+                decisionJson,
+                toolCall,
+                patchResult,
+                verificationResult,
+                it.errors() != null && !it.errors().isEmpty() ? List.copyOf(it.errors()) : null
+        );
+        runStore.appendIteration(runId, record);
     }
 
     private String buildSystemPrompt() {
@@ -398,7 +471,6 @@ public class AgentLoopService {
         }
     }
 
-    /** Defaults for diag endpoint. */
     public static int getDefaultMaxIterations() { return DEFAULT_MAX_ITERATIONS; }
     public static int getDefaultMaxToolCalls() { return DEFAULT_MAX_TOOL_CALLS; }
     public static int getMaxTranscriptChars() { return MAX_TRANSCRIPT_CHARS; }

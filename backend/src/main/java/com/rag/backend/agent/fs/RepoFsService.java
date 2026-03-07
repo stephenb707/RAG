@@ -134,7 +134,7 @@ public class RepoFsService {
                 try {
                     lines = Files.readAllLines(p, StandardCharsets.UTF_8);
                 } catch (Exception ex) {
-                    continue; // skip unreadable files
+                    continue;
                 }
 
                 for (int i = 0; i < lines.size(); i++) {

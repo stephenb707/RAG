@@ -18,9 +18,6 @@ import java.util.concurrent.*;
 public class ExecService {
     private final RunnerRepoConfig repoConfig;
 
-    @Value("${RUNNER_REPO_ROOT:/repos/codebase}")
-    private String runnerRepoRoot;
-
     @Value("${RUNNER_MAX_OUTPUT_BYTES:400000}")
     private int maxOutputBytes;
 
@@ -37,8 +34,15 @@ public class ExecService {
             throw new IllegalArgumentException("command is required");
         }
 
-        Path repoRoot = repoConfig.resolveRepoRootOrThrow(req.repoName());
-        Path workingDir = repoRoot.resolve(req.workingDir()).normalize();
+        Path repoRoot = repoConfig.resolveRepoRootOrThrow(req.repoName()).toAbsolutePath().normalize();
+        String requestedWorkingDir = (req.workingDir() == null || req.workingDir().isBlank()) ? "." : req.workingDir();
+        Path workingDir = repoRoot.resolve(requestedWorkingDir).normalize().toAbsolutePath();
+        if (!workingDir.startsWith(repoRoot)) {
+            throw new IllegalArgumentException("workingDir escapes repo root: " + requestedWorkingDir);
+        }
+        if (!Files.exists(workingDir) || !Files.isDirectory(workingDir)) {
+            throw new IllegalArgumentException("workingDir does not exist or is not a directory: " + requestedWorkingDir);
+        }
 
         Instant start = Instant.now();
 
@@ -127,13 +131,13 @@ public class ExecService {
             try {
                 desc.destroyForcibly();
             } catch (Exception ignored) {
-                // best-effort cleanup
+                
             }
         });
         try {
             handle.destroyForcibly();
         } catch (Exception ignored) {
-            // best-effort cleanup
+
         }
     }
 

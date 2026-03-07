@@ -1,8 +1,5 @@
 package com.rag.backend.agent.exec;
 
-/**
- * Thrown when the HTTP call to the runner times out. Backend should respond 504 and log correlation id.
- */
 public class RunnerTimeoutException extends RuntimeException {
 
     private final String correlationId;

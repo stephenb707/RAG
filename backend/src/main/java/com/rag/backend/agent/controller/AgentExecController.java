@@ -58,7 +58,7 @@ public class AgentExecController {
                     .toBodilessEntity();
             canReachRunnerHealth = true;
         } catch (Exception ignored) {
-            // any failure -> false
+            
         }
         return new ExecDiagResponse(
                 runnerBaseUrl,
