@@ -15,6 +15,9 @@ import com.rag.backend.agent.verification.AgentVerificationService;
 import com.rag.backend.agent.verification.VerificationRunResult;
 import com.rag.backend.agent.verification.VerificationStageResult;
 import com.rag.backend.agent.verification.VerificationStatus;
+import com.rag.backend.agent.blastradius.BlastRadiusService;
+import com.rag.backend.agent.blastradius.BlastRadiusApprovalRequiredException;
+import com.rag.backend.agent.blastradius.BlastRadiusAnalysis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +55,8 @@ class AgentProposalWorkflowServiceTest {
     private CommandRunnerService commandRunnerService;
     @Mock
     private AgentVerificationService verificationService;
+    @Mock
+    private BlastRadiusService blastRadiusService;
 
     private AgentProposalWorkflowService workflowService;
 
@@ -63,7 +68,8 @@ class AgentProposalWorkflowServiceTest {
                 runStore,
                 repoFsService,
                 repoPatchService,
-                verificationService
+                verificationService,
+                blastRadiusService
         );
     }
 
@@ -90,7 +96,8 @@ class AgentProposalWorkflowServiceTest {
                 null,
                 "summary",
                 List.of(),
-                false
+                false,
+                null
         );
         when(proposalStore.get(proposalId)).thenReturn(proposal);
         when(repoFsService.resolveRepoRoot("test-repo")).thenReturn(tempDir);
@@ -100,7 +107,7 @@ class AgentProposalWorkflowServiceTest {
                 )));
 
         AgentApplyProposalResponse response = workflowService.apply(
-                new AgentApplyProposalRequest(proposalId, false, null, null, null)
+                new AgentApplyProposalRequest(proposalId, false, null, null, null, null)
         );
 
         ArgumentCaptor<ApplyPatchRequest> captor = ArgumentCaptor.forClass(ApplyPatchRequest.class);
@@ -138,14 +145,15 @@ class AgentProposalWorkflowServiceTest {
                 null,
                 "summary",
                 List.of(),
-                false
+                false,
+                null
         );
         when(proposalStore.get(proposalId)).thenReturn(proposal);
         when(repoFsService.resolveRepoRoot("test-repo")).thenReturn(tempDir);
         when(repoPatchService.apply(eq(tempDir), any(ApplyPatchRequest.class)))
                 .thenThrow(new PatchConflictException("expectedSha256 mismatch for src/Main.java. expected=oldSha actual=otherSha"));
 
-        assertThatThrownBy(() -> workflowService.apply(new AgentApplyProposalRequest(proposalId, false, null, null, null)))
+        assertThatThrownBy(() -> workflowService.apply(new AgentApplyProposalRequest(proposalId, false, null, null, null, null)))
                 .isInstanceOf(PatchConflictException.class)
                 .hasMessageContaining("expectedSha256 mismatch");
 
@@ -156,7 +164,7 @@ class AgentProposalWorkflowServiceTest {
     void apply_throws_when_proposal_not_found() {
         when(proposalStore.get("missing")).thenReturn(null);
 
-        assertThatThrownBy(() -> workflowService.apply(new AgentApplyProposalRequest("missing", false, null, null, null)))
+        assertThatThrownBy(() -> workflowService.apply(new AgentApplyProposalRequest("missing", false, null, null, null, null)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not found");
     }
@@ -166,11 +174,11 @@ class AgentProposalWorkflowServiceTest {
         AgentProposalRecord proposal = new AgentProposalRecord(
                 "prop-3",
                 "r", ".", "g", "2025-01-01T00:00:00Z", "applied",
-                "p", List.of(), List.of(), List.of(), false, null, null, null, "s", List.of(), false
+                "p", List.of(), List.of(), List.of(), false, null, null, null, "s", List.of(), false, null
         );
         when(proposalStore.get("prop-3")).thenReturn(proposal);
 
-        assertThatThrownBy(() -> workflowService.apply(new AgentApplyProposalRequest("prop-3", false, null, null, null)))
+        assertThatThrownBy(() -> workflowService.apply(new AgentApplyProposalRequest("prop-3", false, null, null, null, null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("status=applied");
     }
@@ -195,7 +203,8 @@ class AgentProposalWorkflowServiceTest {
                 null,
                 "summary",
                 List.of(),
-                false
+                false,
+                null
         );
         when(proposalStore.get(proposalId)).thenReturn(proposal);
         when(repoFsService.resolveRepoRoot("test-repo")).thenReturn(tempDir);
@@ -212,7 +221,7 @@ class AgentProposalWorkflowServiceTest {
         when(verificationService.runStages(eq("test-repo"), eq("."), any(), eq(true))).thenReturn(passedResult);
 
         AgentApplyProposalResponse response = workflowService.apply(
-                new AgentApplyProposalRequest(proposalId, true, null, null, null)
+                new AgentApplyProposalRequest(proposalId, true, null, null, null, null)
         );
 
         assertThat(response.verificationResult()).isNotNull();
@@ -242,7 +251,8 @@ class AgentProposalWorkflowServiceTest {
                 null,
                 "summary",
                 List.of(),
-                false
+                false,
+                null
         );
         when(proposalStore.get(proposalId)).thenReturn(proposal);
         when(repoFsService.resolveRepoRoot("test-repo")).thenReturn(tempDir);
@@ -261,6 +271,7 @@ class AgentProposalWorkflowServiceTest {
         String followUpId = "follow-up-123";
         when(proposalStore.generateProposalId()).thenReturn(followUpId);
         when(runStore.createRun(anyString(), anyString(), anyString(), anyString(), anyString(), anyString())).thenReturn("run-follow-up");
+        when(blastRadiusService.analyze(any(), any())).thenReturn(new BlastRadiusAnalysis(1, 0, 0, 1, List.of(), false));
         when(changeWorkflowService.proposeOnly(any())).thenReturn(new ProposalGenerationResult(
                 "fix plan",
                 List.of(new com.rag.backend.agent.dto.AgentChangeWorkflowResponse.ProposedEdit("src/Main.java", "fix", "newContent")),
@@ -269,11 +280,11 @@ class AgentProposalWorkflowServiceTest {
         ));
         when(proposalStore.get(followUpId)).thenReturn(new AgentProposalRecord(
                 followUpId, "test-repo", ".", "goal", "2025-01-01T00:00:00Z", "proposed",
-                "plan", List.of(), List.of(), List.of(), false, "run-2", null, null, "s", List.of(), false
+                "plan", List.of(), List.of(), List.of(), false, "run-2", null, null, "s", List.of(), false, null
         ));
 
         AgentApplyProposalResponse response = workflowService.apply(
-                new AgentApplyProposalRequest(proposalId, true, null, null, null)
+                new AgentApplyProposalRequest(proposalId, true, null, null, null, null)
         );
 
         assertThat(response.verificationResult().overallStatus()).isEqualTo(VerificationStatus.failed);
@@ -309,15 +320,110 @@ class AgentProposalWorkflowServiceTest {
                 null,
                 "s",
                 List.of(),
-                false
+                false,
+                null
         );
         when(proposalStore.get(proposalId)).thenReturn(proposal);
         when(repoFsService.resolveRepoRoot("test-repo")).thenReturn(tempDir);
         when(repoPatchService.apply(eq(tempDir), any(ApplyPatchRequest.class)))
                 .thenReturn(new ApplyPatchResponse("test-repo", 1, List.of()));
 
-        workflowService.apply(new AgentApplyProposalRequest(proposalId, false, false, null, null));
+        workflowService.apply(new AgentApplyProposalRequest(proposalId, false, false, null, null, null));
 
         verify(verificationService, never()).runStages(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void apply_rejects_risky_proposal_when_explicitApproval_false() {
+        String proposalId = "prop-risky";
+        BlastRadiusAnalysis blastRadius = new BlastRadiusAnalysis(4, 0, 0, 4, List.of("many_files"), true);
+        AgentProposalRecord proposal = new AgentProposalRecord(
+                proposalId,
+                "test-repo",
+                ".",
+                "goal",
+                "2025-01-01T00:00:00Z",
+                "proposed",
+                "plan",
+                List.of(
+                        new AgentProposalRecord.ProposedEditEntry("a.java", "r", "c1"),
+                        new AgentProposalRecord.ProposedEditEntry("b.java", "r", "c2"),
+                        new AgentProposalRecord.ProposedEditEntry("c.java", "r", "c3"),
+                        new AgentProposalRecord.ProposedEditEntry("d.java", "r", "c4")
+                ),
+                List.of(
+                        new ApplyPatchRequest.PatchChange("a.java", "s1", "c1"),
+                        new ApplyPatchRequest.PatchChange("b.java", "s2", "c2"),
+                        new ApplyPatchRequest.PatchChange("c.java", "s3", "c3"),
+                        new ApplyPatchRequest.PatchChange("d.java", "s4", "c4")
+                ),
+                List.of(),
+                false,
+                null,
+                null,
+                null,
+                "summary",
+                List.of("many_files"),
+                true,
+                blastRadius
+        );
+        when(proposalStore.get(proposalId)).thenReturn(proposal);
+
+        assertThatThrownBy(() -> workflowService.apply(new AgentApplyProposalRequest(proposalId, false, null, null, null, null)))
+                .isInstanceOf(BlastRadiusApprovalRequiredException.class)
+                .hasMessageContaining("explicit approval")
+                .satisfies(ex -> {
+                    BlastRadiusApprovalRequiredException e = (BlastRadiusApprovalRequiredException) ex;
+                    assertThat(e.getProposalId()).isEqualTo(proposalId);
+                    assertThat(e.getBlastRadiusReasons()).contains("many_files");
+                });
+        verify(repoPatchService, never()).apply(any(), any());
+    }
+
+    @Test
+    void apply_succeeds_for_risky_proposal_when_explicitApproval_true() {
+        String proposalId = "prop-risky-approved";
+        BlastRadiusAnalysis blastRadius = new BlastRadiusAnalysis(4, 0, 0, 4, List.of("many_files"), true);
+        AgentProposalRecord proposal = new AgentProposalRecord(
+                proposalId,
+                "test-repo",
+                ".",
+                "goal",
+                "2025-01-01T00:00:00Z",
+                "proposed",
+                "plan",
+                List.of(
+                        new AgentProposalRecord.ProposedEditEntry("a.java", "r", "c1"),
+                        new AgentProposalRecord.ProposedEditEntry("b.java", "r", "c2")
+                ),
+                List.of(
+                        new ApplyPatchRequest.PatchChange("a.java", "s1", "c1"),
+                        new ApplyPatchRequest.PatchChange("b.java", "s2", "c2")
+                ),
+                List.of(),
+                false,
+                null,
+                null,
+                null,
+                "summary",
+                List.of("many_files"),
+                true,
+                blastRadius
+        );
+        when(proposalStore.get(proposalId)).thenReturn(proposal);
+        when(repoFsService.resolveRepoRoot("test-repo")).thenReturn(tempDir);
+        when(repoPatchService.apply(eq(tempDir), any(ApplyPatchRequest.class)))
+                .thenReturn(new ApplyPatchResponse("test-repo", 2, List.of(
+                        new ApplyPatchResponse.FileResult("a.java", false, "s1", "a1", 10L),
+                        new ApplyPatchResponse.FileResult("b.java", false, "s2", "a2", 10L)
+                )));
+
+        AgentApplyProposalResponse response = workflowService.apply(
+                new AgentApplyProposalRequest(proposalId, false, null, null, null, true)
+        );
+
+        assertThat(response.status()).isEqualTo("applied");
+        assertThat(response.applyResult().appliedCount()).isEqualTo(2);
+        verify(repoPatchService).apply(eq(tempDir), any(ApplyPatchRequest.class));
     }
 }

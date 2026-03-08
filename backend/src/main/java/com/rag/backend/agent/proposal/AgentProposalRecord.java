@@ -2,6 +2,7 @@ package com.rag.backend.agent.proposal;
 
 import com.rag.backend.agent.dto.ApplyPatchRequest;
 import com.rag.backend.agent.dto.AgentProposalResponse;
+import com.rag.backend.agent.blastradius.BlastRadiusAnalysis;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +24,8 @@ public record AgentProposalRecord(
         String verificationFailureStage,
         String summary,
         List<String> riskFlags,
-        boolean requiresApproval
+        boolean requiresApproval,
+        BlastRadiusAnalysis blastRadiusAnalysis
 ) {
     public AgentProposalRecord {
         if (proposedEdits == null) proposedEdits = new ArrayList<>();

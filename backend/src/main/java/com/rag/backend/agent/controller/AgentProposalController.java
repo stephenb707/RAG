@@ -54,6 +54,7 @@ public class AgentProposalController {
                 r.diffSummaries(),
                 r.riskFlags(),
                 r.requiresApproval(),
+                r.blastRadiusAnalysis(),
                 r.summary(),
                 r.originatingRunId(),
                 r.status()

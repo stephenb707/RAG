@@ -104,7 +104,8 @@ public class AgentProposalStoreService {
                 existing.verificationFailureStage(),
                 existing.summary(),
                 existing.riskFlags(),
-                existing.requiresApproval()
+                existing.requiresApproval(),
+                existing.blastRadiusAnalysis()
         );
         save(updated);
     }

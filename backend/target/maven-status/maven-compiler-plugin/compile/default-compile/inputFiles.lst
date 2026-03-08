@@ -25,6 +25,7 @@ C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agen
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\dto\AgentChangeWorkflowResponse.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\dto\RagAnswer.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\exec\CommandRunnerService.java
+C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\blastradius\BlastRadiusApprovalRequiredException.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\indexing\Chunker.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\workflow\AgentLoopService.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\controller\ApiExceptionHandler.java
@@ -39,6 +40,7 @@ C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agen
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\controller\GlobalExceptionHandler.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\controller\AgentRepoController.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\dto\AgentProposeWorkflowRequest.java
+C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\blastradius\BlastRadiusAnalysis.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\dto\AgentLoopRequest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\dto\ApplyPatchResponse.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\fs\RepoPatchService.java
@@ -65,6 +67,7 @@ C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agen
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\verification\VerificationStageResult.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\retrieval\ChunkEmbeddingService.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\dto\ExecRunResponse.java
+C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\blastradius\BlastRadiusService.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\workflow\AgentChangeWorkflowService.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\indexing\IndexingService.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\main\java\com\rag\backend\agent\proposal\AgentProposalRecord.java

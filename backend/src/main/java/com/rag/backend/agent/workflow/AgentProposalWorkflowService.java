@@ -6,8 +6,10 @@ import com.rag.backend.agent.fs.RepoFsService;
 import com.rag.backend.agent.fs.RepoPatchService;
 import com.rag.backend.agent.proposal.AgentProposalRecord;
 import com.rag.backend.agent.proposal.AgentProposalStoreService;
-import com.rag.backend.agent.proposal.ProposalRiskFlags;
 import com.rag.backend.agent.run.AgentRunStoreService;
+import com.rag.backend.agent.blastradius.BlastRadiusAnalysis;
+import com.rag.backend.agent.blastradius.BlastRadiusService;
+import com.rag.backend.agent.blastradius.BlastRadiusApprovalRequiredException;
 import com.rag.backend.agent.verification.AgentVerificationService;
 import com.rag.backend.agent.verification.VerificationRunResult;
 import com.rag.backend.agent.verification.VerificationStageRequest;
@@ -30,6 +32,7 @@ public class AgentProposalWorkflowService {
     private final RepoFsService repoFsService;
     private final RepoPatchService repoPatchService;
     private final AgentVerificationService verificationService;
+    private final BlastRadiusService blastRadiusService;
 
     public AgentProposalWorkflowService(
             AgentChangeWorkflowService changeWorkflowService,
@@ -37,7 +40,8 @@ public class AgentProposalWorkflowService {
             AgentRunStoreService runStore,
             RepoFsService repoFsService,
             RepoPatchService repoPatchService,
-            AgentVerificationService verificationService
+            AgentVerificationService verificationService,
+            BlastRadiusService blastRadiusService
     ) {
         this.changeWorkflowService = changeWorkflowService;
         this.proposalStore = proposalStore;
@@ -45,6 +49,7 @@ public class AgentProposalWorkflowService {
         this.repoFsService = repoFsService;
         this.repoPatchService = repoPatchService;
         this.verificationService = verificationService;
+        this.blastRadiusService = blastRadiusService;
     }
 
     public AgentProposalResponse propose(AgentProposeWorkflowRequest req) throws Exception {
@@ -59,14 +64,15 @@ public class AgentProposalWorkflowService {
         String runId = runStore.createRun(repoName, workingDir, goal, "workflow_propose", "gpt-4o", "v1");
 
         List<String> paths = result.proposedEdits().stream().map(AgentChangeWorkflowResponse.ProposedEdit::path).toList();
-        List<String> riskFlags = ProposalRiskFlags.computeRiskFlags(paths);
-        boolean requiresApproval = ProposalRiskFlags.requiresApproval(riskFlags);
+        BlastRadiusAnalysis blastRadiusAnalysis = blastRadiusService.analyze(paths, result.patchChanges());
+        List<String> riskFlags = blastRadiusAnalysis.reasons();
+        boolean requiresApproval = blastRadiusAnalysis.requiresExplicitApproval();
 
         List<AgentProposalRecord.ProposedEditEntry> proposedEditEntries = result.proposedEdits().stream()
                 .map(e -> new AgentProposalRecord.ProposedEditEntry(e.path(), e.rationale(), e.newContent()))
                 .collect(Collectors.toList());
 
-        String summary = buildProposalSummary(goal, result);
+        String summary = buildProposalSummary(goal, result, blastRadiusAnalysis);
 
         AgentProposalRecord record = new AgentProposalRecord(
                 proposalId,
@@ -85,7 +91,8 @@ public class AgentProposalWorkflowService {
                 null,
                 summary,
                 riskFlags,
-                requiresApproval
+                requiresApproval,
+                blastRadiusAnalysis
         );
         proposalStore.save(record);
 
@@ -103,6 +110,7 @@ public class AgentProposalWorkflowService {
                 result.diffSummaries(),
                 riskFlags,
                 requiresApproval,
+                blastRadiusAnalysis,
                 summary,
                 runId,
                 "proposed"
@@ -121,6 +129,15 @@ public class AgentProposalWorkflowService {
         }
         if (!"proposed".equals(proposal.status())) {
             throw new IllegalStateException("Proposal cannot be applied; status=" + proposal.status());
+        }
+
+        boolean requiresExplicitApproval = (proposal.blastRadiusAnalysis() != null && proposal.blastRadiusAnalysis().requiresExplicitApproval())
+                || proposal.requiresApproval();
+        if (requiresExplicitApproval && !Boolean.TRUE.equals(req.explicitApproval())) {
+            List<String> reasons = proposal.blastRadiusAnalysis() != null && proposal.blastRadiusAnalysis().reasons() != null
+                    ? proposal.blastRadiusAnalysis().reasons()
+                    : (proposal.riskFlags() != null ? proposal.riskFlags() : List.of());
+            throw new BlastRadiusApprovalRequiredException(proposalId, reasons);
         }
 
         Path repoRoot = repoFsService.resolveRepoRoot(proposal.repoName());
@@ -235,7 +252,8 @@ public class AgentProposalWorkflowService {
                     failedStage,
                     created.summary(),
                     created.riskFlags(),
-                    created.requiresApproval()
+                    created.requiresApproval(),
+                    created.blastRadiusAnalysis()
             );
             proposalStore.save(updated);
         }
@@ -256,7 +274,7 @@ public class AgentProposalWorkflowService {
         return sb.toString();
     }
 
-    private static String buildProposalSummary(String goal, ProposalGenerationResult result) {
+    private static String buildProposalSummary(String goal, ProposalGenerationResult result, BlastRadiusAnalysis blastRadius) {
         StringBuilder sb = new StringBuilder();
         sb.append("Goal: ").append(goal).append("\n");
         sb.append("Plan: ").append(result.plan()).append("\n");
@@ -264,6 +282,16 @@ public class AgentProposalWorkflowService {
         int added = result.diffSummaries().stream().mapToInt(AgentProposalResponse.DiffSummaryItem::addedLines).sum();
         int removed = result.diffSummaries().stream().mapToInt(AgentProposalResponse.DiffSummaryItem::removedLines).sum();
         sb.append("Diff totals: +").append(added).append(" / -").append(removed).append("\n");
+        if (blastRadius != null) {
+            sb.append("Blast radius: score=").append(blastRadius.blastRadiusScore())
+                    .append(" files=").append(blastRadius.fileCount())
+                    .append(" sensitive=").append(blastRadius.sensitiveFileCount())
+                    .append(" created=").append(blastRadius.createdFileCount());
+            if (blastRadius.requiresExplicitApproval()) {
+                sb.append(" (explicit approval required: ").append(String.join(", ", blastRadius.reasons())).append(")");
+            }
+            sb.append("\n");
+        }
         return sb.toString();
     }
 

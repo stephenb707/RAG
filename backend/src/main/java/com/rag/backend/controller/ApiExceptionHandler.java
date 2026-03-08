@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.rag.backend.agent.fs.PatchConflictException;
+import com.rag.backend.agent.blastradius.BlastRadiusApprovalRequiredException;
 
 import java.io.IOException;
 import java.util.Map;
@@ -27,6 +28,17 @@ public class ApiExceptionHandler {
     public ResponseEntity<Map<String, String>> handlePatchConflict(PatchConflictException ex) {
     return ResponseEntity.status(HttpStatus.CONFLICT)
         .body(Map.of("error", "conflict", "message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(BlastRadiusApprovalRequiredException.class)
+    public ResponseEntity<Map<String, Object>> handleBlastRadiusApprovalRequired(BlastRadiusApprovalRequiredException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of(
+                        "error", "approval_required",
+                        "message", ex.getMessage(),
+                        "proposalId", ex.getProposalId() != null ? ex.getProposalId() : "",
+                        "blastRadiusReasons", ex.getBlastRadiusReasons() != null ? ex.getBlastRadiusReasons() : java.util.List.of()
+                ));
     }
 
     @ExceptionHandler(RunnerBadGatewayException.class)

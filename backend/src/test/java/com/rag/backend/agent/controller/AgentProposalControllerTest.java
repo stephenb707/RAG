@@ -44,7 +44,8 @@ class AgentProposalControllerTest {
                 null,
                 "Summary",
                 List.of(),
-                false
+                false,
+                null
         );
         when(proposalStore.get("prop-1")).thenReturn(record);
 
@@ -71,7 +72,7 @@ class AgentProposalControllerTest {
     void listProposals_returns_list() throws Exception {
         AgentProposalRecord record = new AgentProposalRecord(
                 "p1", "r", ".", "g", "2025-01-01T00:00:00Z", "proposed",
-                "plan", List.of(), List.of(), List.of(), false, null, null, null, "s", List.of(), false
+                "plan", List.of(), List.of(), List.of(), false, null, null, null, "s", List.of(), false, null
         );
         when(proposalStore.list(20)).thenReturn(List.of(record));
 

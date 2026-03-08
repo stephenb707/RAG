@@ -9,5 +9,6 @@ public record AgentApplyProposalRequest(
         Boolean runTests,
         Boolean runVerification,
         List<VerificationStageRequest> verificationStages,
-        List<String> testCommand
+        List<String> testCommand,
+        Boolean explicitApproval
 ) {}

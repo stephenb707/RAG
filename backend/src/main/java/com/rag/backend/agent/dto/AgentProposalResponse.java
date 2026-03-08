@@ -1,5 +1,7 @@
 package com.rag.backend.agent.dto;
 
+import com.rag.backend.agent.blastradius.BlastRadiusAnalysis;
+
 import java.util.List;
 
 public record AgentProposalResponse(
@@ -12,6 +14,7 @@ public record AgentProposalResponse(
         List<DiffSummaryItem> diffSummaries,
         List<String> riskFlags,
         boolean requiresApproval,
+        BlastRadiusAnalysis blastRadiusAnalysis,
         String summary,
         String runId,
         String status

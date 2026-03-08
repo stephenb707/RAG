@@ -15,6 +15,7 @@ C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agen
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\ChatControllerWebTest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\ChatControllerCodeReviewIT.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\IndexControllerIT.java
+C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\blastradius\BlastRadiusServiceTest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\agent\workflow\AgentLoopServiceTest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\config\RagRepoConfigTest.java
 C:\Users\steph\OneDrive\Documents\RAG\backend\src\test\java\com\rag\backend\RetrieveControllerWebTest.java

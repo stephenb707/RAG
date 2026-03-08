@@ -3,6 +3,7 @@ package com.rag.backend.agent.proposal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rag.backend.agent.dto.AgentProposalResponse;
 import com.rag.backend.agent.dto.ApplyPatchRequest;
+import com.rag.backend.agent.blastradius.BlastRadiusAnalysis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -45,7 +46,8 @@ class AgentProposalStoreServiceTest {
                 null,
                 "Summary",
                 List.of(),
-                false
+                false,
+                null
         );
         store.save(record);
 
@@ -74,7 +76,8 @@ class AgentProposalStoreServiceTest {
                 null,
                 "sum",
                 List.of("many_files"),
-                true
+                true,
+                null
         );
         store.save(record);
 
@@ -99,7 +102,7 @@ class AgentProposalStoreServiceTest {
         AgentProposalRecord record = new AgentProposalRecord(
                 "prop-update",
                 "r", ".", "g", "2025-01-01T00:00:00Z", "proposed",
-                "plan", List.of(), List.of(), List.of(), false, null, null, null, "sum", List.of(), false
+                "plan", List.of(), List.of(), List.of(), false, null, null, null, "sum", List.of(), false, null
         );
         store.save(record);
         store.updateStatus("prop-update", "applied");
@@ -112,11 +115,11 @@ class AgentProposalStoreServiceTest {
     void list_returns_recent_first() {
         AgentProposalRecord r1 = new AgentProposalRecord(
                 "p1", "r", ".", "g1", "2025-01-01T00:00:00Z", "proposed",
-                "plan", List.of(), List.of(), List.of(), false, null, null, null, "s1", List.of(), false
+                "plan", List.of(), List.of(), List.of(), false, null, null, null, "s1", List.of(), false, null
         );
         AgentProposalRecord r2 = new AgentProposalRecord(
                 "p2", "r", ".", "g2", "2025-01-01T00:00:00Z", "proposed",
-                "plan", List.of(), List.of(), List.of(), false, null, null, null, "s2", List.of(), false
+                "plan", List.of(), List.of(), List.of(), false, null, null, null, "s2", List.of(), false, null
         );
         store.save(r1);
         store.save(r2);
@@ -131,13 +134,48 @@ class AgentProposalStoreServiceTest {
     void list_respects_limit() {
         store.save(new AgentProposalRecord(
                 "a", "r", ".", "g", "2025-01-01T00:00:00Z", "proposed",
-                "p", List.of(), List.of(), List.of(), false, null, null, null, "s", List.of(), false
+                "p", List.of(), List.of(), List.of(), false, null, null, null, "s", List.of(), false, null
         ));
         store.save(new AgentProposalRecord(
                 "b", "r", ".", "g", "2025-01-01T00:00:00Z", "proposed",
-                "p", List.of(), List.of(), List.of(), false, null, null, null, "s", List.of(), false
+                "p", List.of(), List.of(), List.of(), false, null, null, null, "s", List.of(), false, null
         ));
         List<AgentProposalRecord> one = store.list(1);
         assertThat(one).hasSize(1);
+    }
+
+    @Test
+    void save_and_get_persists_blast_radius_analysis() {
+        BlastRadiusAnalysis analysis = new BlastRadiusAnalysis(1, 1, 0, 3, List.of("touches_auth_security"), true);
+        AgentProposalRecord record = new AgentProposalRecord(
+                "prop-blast",
+                "r",
+                ".",
+                "goal",
+                "2025-01-01T00:00:00Z",
+                "proposed",
+                "plan",
+                List.of(new AgentProposalRecord.ProposedEditEntry("auth/Login.java", "r", "c")),
+                List.of(new ApplyPatchRequest.PatchChange("auth/Login.java", "sha", "c")),
+                List.of(),
+                false,
+                null,
+                null,
+                null,
+                "summary",
+                List.of("touches_auth_security"),
+                true,
+                analysis
+        );
+        store.save(record);
+
+        AgentProposalRecord loaded = store.get("prop-blast");
+        assertThat(loaded).isNotNull();
+        assertThat(loaded.blastRadiusAnalysis()).isNotNull();
+        assertThat(loaded.blastRadiusAnalysis().fileCount()).isEqualTo(1);
+        assertThat(loaded.blastRadiusAnalysis().sensitiveFileCount()).isEqualTo(1);
+        assertThat(loaded.blastRadiusAnalysis().blastRadiusScore()).isEqualTo(3);
+        assertThat(loaded.blastRadiusAnalysis().reasons()).contains("touches_auth_security");
+        assertThat(loaded.blastRadiusAnalysis().requiresExplicitApproval()).isTrue();
     }
 }
